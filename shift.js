@@ -1993,7 +1993,7 @@ function formatTimeOnly(timeValue) {
     if (typeof timeValue === 'string' && timeValue.includes('T')) {
         try {
             const date = new Date(timeValue);
-            const hours = String(date.getUTCHours() + 8).padStart(2, '0');
+            const hours = String((date.getUTCHours() + 8) % 24).padStart(2, '0');
             const minutes = String(date.getUTCMinutes()).padStart(2, '0');
             return `${hours}:${minutes}`;
         } catch (e) {

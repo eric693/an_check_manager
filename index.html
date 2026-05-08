@@ -1653,6 +1653,53 @@
                         </div>
                     </div>
 
+                    <!-- 請假紀錄報表匯出 -->
+                    <div class="card p-6 mt-6">
+                        <h2 data-i18n="LEAVE_REPORT_TITLE"
+                            class="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                            匯出請假紀錄報表
+                        </h2>
+                        <p data-i18n="LEAVE_REPORT_DESCRIPTION"
+                           class="text-gray-500 dark:text-gray-400 mb-4">
+                            匯出員工請假紀錄為 Excel 格式
+                        </p>
+
+                        <div class="space-y-4">
+                            <!-- 選擇員工 -->
+                            <div>
+                                <label data-i18n="SELECT_EMPLOYEE_LABEL"
+                                    for="leave-report-employee"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    選擇員工
+                                </label>
+                                <select id="leave-report-employee"
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="ALL" data-i18n="ALL_EMPLOYEES">全部員工</option>
+                                </select>
+                            </div>
+
+                            <!-- 選擇月份 -->
+                            <div>
+                                <label data-i18n="SELECT_MONTH_LABEL"
+                                    for="leave-report-month"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    選擇月份
+                                </label>
+                                <input type="month"
+                                    id="leave-report-month"
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+
+                            <!-- 匯出按鈕 -->
+                            <button id="export-leave-report-btn"
+                                    onclick="exportLeaveReport()"
+                                    data-i18n="BTN_EXPORT_LEAVE_REPORT"
+                                    class="w-full py-3 px-4 rounded-lg font-bold btn-primary">
+                                匯出請假報表
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- 管理員匯出工作日誌報表 -->
                     <div class="card p-6 mt-6">
                         <h2 data-i18n="WORKLOG_EXPORT_TITLE" 

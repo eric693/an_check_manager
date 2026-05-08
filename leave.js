@@ -868,3 +868,129 @@ async function handleReviewLeave(button, action) {
         button.textContent = action === 'approve' ? '核准' : '拒絕';
     }
 }
+
+// ==================== 📊 請假紀錄報表匯出（管理員）====================
+
+/**
+ * 載入請假報表員工下拉選單
+ */
+async function loadLeaveReportEmployees() {
+    const select = document.getElementById('leave-report-employee');
+    if (!select) return;
+
+    try {
+        const res = await callApifetch('getAllUsers');
+        if (!res.ok || !res.users) return;
+
+        select.innerHTML = '';
+
+        const allOption = document.createElement('option');
+        allOption.value = 'ALL';
+        allOption.textContent = t('ALL_EMPLOYEES') || '全部員工';
+        select.appendChild(allOption);
+
+        res.users.forEach(user => {
+            const opt = document.createElement('option');
+            opt.value = user.userId;
+            opt.textContent = `${user.name} (${user.dept || t('UNCATEGORIZED') || '未分類'})`;
+            select.appendChild(opt);
+        });
+    } catch (err) {
+        console.error('載入員工列表失敗:', err);
+    }
+}
+
+/**
+ * 匯出請假紀錄報表（管理員）
+ */
+async function exportLeaveReport() {
+    const select = document.getElementById('leave-report-employee');
+    const monthInput = document.getElementById('leave-report-month');
+    const exportBtn = document.getElementById('export-leave-report-btn');
+
+    if (!select || !monthInput) return;
+
+    const selectedUserId = select.value;
+    const yearMonth = monthInput.value;
+
+    if (!yearMonth) {
+        showNotification(t('SELECT_MONTH_FIRST') || '請先選擇月份', 'error');
+        return;
+    }
+
+    const loadingText = t('EXPORT_LOADING') || '正在準備報表...';
+    showNotification(loadingText, 'warning');
+    if (exportBtn) generalButtonState(exportBtn, 'processing', loadingText);
+
+    try {
+        let apiAction = `getAllLeaveReport&yearMonth=${yearMonth}`;
+        if (selectedUserId !== 'ALL') {
+            apiAction += `&userId=${selectedUserId}`;
+        }
+
+        const res = await callApifetch(apiAction);
+
+        if (!res.ok || !res.records || res.records.length === 0) {
+            showNotification(t('LEAVE_REPORT_NO_DATA') || '本月沒有請假紀錄', 'warning');
+            return;
+        }
+
+        const isAll = (selectedUserId === 'ALL');
+        const employeeName = isAll
+            ? (t('ALL_EMPLOYEES') || '全部員工')
+            : select.options[select.selectedIndex].text.split(' (')[0];
+
+        _generateLeaveReportExcel(employeeName, yearMonth, res.records, isAll);
+        showNotification(t('EXPORT_SUCCESS') || '報表已成功匯出！', 'success');
+
+    } catch (err) {
+        console.error('匯出請假報表失敗:', err);
+        showNotification(t('EXPORT_FAILED') || '匯出失敗，請稍後再試', 'error');
+    } finally {
+        if (exportBtn) generalButtonState(exportBtn, 'idle');
+    }
+}
+
+/**
+ * 產生請假報表 Excel 檔案
+ */
+function _generateLeaveReportExcel(employeeName, yearMonth, records, isAll) {
+    const [year, month] = yearMonth.split('-');
+
+    const statusMap = {
+        'PENDING':  t('PENDING')  || '待審核',
+        'APPROVED': t('APPROVED') || '已核准',
+        'REJECTED': t('REJECTED') || '已拒絕'
+    };
+
+    const exportData = records.map(r => {
+        const row = {};
+        if (isAll) {
+            row[t('EMPLOYEE_NAME') || '員工姓名'] = r.employeeName || '';
+            row[t('DEPARTMENT')    || '部門']     = r.dept || '';
+        }
+        row[t('LEAVE_TYPE_LABEL')       || '假別']     = t(r.leaveType) || r.leaveType;
+        row[t('LEAVE_START_DATE_LABEL') || '開始時間'] = r.startDateTime || '';
+        row[t('LEAVE_END_DATE_LABEL')   || '結束時間'] = r.endDateTime   || '';
+        row[t('WORK_HOURS')             || '請假時數'] = r.workHours || 0;
+        row[t('DAYS')                   || '天數']     = r.days || 0;
+        row[t('LEAVE_REASON_LABEL')     || '原因']     = r.reason || '-';
+        row[t('STATUS')                 || '狀態']     = statusMap[r.status] || r.status;
+        row[t('REVIEWER_LABEL')         || '審核人']   = r.reviewer || '-';
+        row[t('REVIEW_COMMENT_LABEL')   || '審核意見'] = r.reviewComment || '-';
+        return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    const colWidths = isAll
+        ? [12, 10, 14, 20, 20, 10, 8, 30, 10, 12, 25]
+        : [14, 20, 20, 10, 8, 30, 10, 12, 25];
+    ws['!cols'] = colWidths.map(wch => ({ wch }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `${month}月請假紀錄`);
+
+    const fileName = `${employeeName}_${year}年${month}月_請假紀錄.xlsx`;
+    XLSX.writeFile(wb, fileName);
+}

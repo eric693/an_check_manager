@@ -2207,12 +2207,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (tabId === 'admin-view') {
             fetchAndRenderReviewRequests();
             loadPendingOvertimeRequests();
-            loadPendingWorklogs();  // 
+            loadPendingWorklogs();  //
             loadPendingLeaveRequests();
             displayAdminAnnouncements();
             initAdminAnalysis();
             loadAllUsers();
             checkTriggerStatus();
+            loadLeaveReportEmployees();
         } else if (tabId === 'overtime-view') {
             initOvertimeTab();
         } else if (tabId === 'leave-view') {

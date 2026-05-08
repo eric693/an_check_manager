@@ -118,7 +118,9 @@ function doGet(e) {
         return respond1(handleReviewLeave(e.parameter));
       case "initializeEmployeeLeave":
         return respond1(handleInitializeEmployeeLeave(e.parameter));
-      
+      case "getAllLeaveReport":
+        return respond1(handleGetAllLeaveReport(e.parameter));
+
       // ==================== 工作日誌系統（⭐ 新增在這裡）====================
       case "submitWorklog":
         return respond1(handleSubmitWorklog(e.parameter));

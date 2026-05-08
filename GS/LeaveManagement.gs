@@ -127,13 +127,13 @@ function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime,
     
     const formattedStartDateTime = Utilities.formatDate(
       start,
-      Session.getScriptTimeZone(),
+      'Asia/Taipei',
       'yyyy-MM-dd HH:mm:ss'
     );
     
     const formattedEndDateTime = Utilities.formatDate(
       end,
-      Session.getScriptTimeZone(),
+      'Asia/Taipei',
       'yyyy-MM-dd HH:mm:ss'
     );
     
@@ -298,7 +298,7 @@ function calculateWorkHoursAndDays_Unlimited(start, end) {
           const overlapHours = overlapMs / (1000 * 60 * 60);
           lunchHoursToDeduct += overlapHours;
           
-          Logger.log(`      ${Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')} 扣除: ${overlapHours.toFixed(2)} 小時`);
+          Logger.log(`      ${Utilities.formatDate(currentDate, 'Asia/Taipei', 'yyyy-MM-dd')} 扣除: ${overlapHours.toFixed(2)} 小時`);
         }
         
         // 移到下一天
@@ -416,21 +416,21 @@ function getLeaveBalance(sessionToken) {
         const balance = {
           employeeName: values[i][1] || user.name,
           hireDate: values[i][2] || null,        // C: 到職日 ⭐
-          ANNUAL_LEAVE: toHours(values[i][3]),   // D ⭐
-          SICK_LEAVE: values[i][4] || 0,         // E ⭐
-          PERSONAL_LEAVE: values[i][5] || 0,
-          BEREAVEMENT_LEAVE: values[i][6] || 0,
-          MARRIAGE_LEAVE: values[i][7] || 0,
-          MATERNITY_LEAVE: values[i][8] || 0,
-          PATERNITY_LEAVE: values[i][9] || 0,
-          HOSPITALIZATION_LEAVE: values[i][10] || 0,
-          MENSTRUAL_LEAVE: values[i][11] || 0,
-          FAMILY_CARE_LEAVE: values[i][12] || 0,
-          OFFICIAL_LEAVE: values[i][13] || 0,
-          WORK_INJURY_LEAVE: values[i][14] || 0,
-          NATURAL_DISASTER_LEAVE: values[i][15] || 0,
-          COMP_TIME_OFF: values[i][16] || 0,
-          ABSENCE_WITHOUT_LEAVE: values[i][17] || 0
+          ANNUAL_LEAVE: toHours(values[i][3]),           // D ⭐
+          SICK_LEAVE: toHours(values[i][4]),             // E ⭐
+          PERSONAL_LEAVE: toHours(values[i][5]),
+          BEREAVEMENT_LEAVE: toHours(values[i][6]),
+          MARRIAGE_LEAVE: toHours(values[i][7]),
+          MATERNITY_LEAVE: toHours(values[i][8]),
+          PATERNITY_LEAVE: toHours(values[i][9]),
+          HOSPITALIZATION_LEAVE: toHours(values[i][10]),
+          MENSTRUAL_LEAVE: toHours(values[i][11]),
+          FAMILY_CARE_LEAVE: toHours(values[i][12]),
+          OFFICIAL_LEAVE: toHours(values[i][13]),
+          WORK_INJURY_LEAVE: toHours(values[i][14]),
+          NATURAL_DISASTER_LEAVE: toHours(values[i][15]),
+          COMP_TIME_OFF: toHours(values[i][16]),
+          ABSENCE_WITHOUT_LEAVE: toHours(values[i][17])
         };
 
         // ⭐ 格式化到職日
@@ -845,7 +845,7 @@ function reviewLeaveRequest(sessionToken, rowNumber, reviewAction, comment) {
     try {
       let yearMonth = '';
       if (leaveStartDate instanceof Date) {
-        yearMonth = Utilities.formatDate(leaveStartDate, Session.getScriptTimeZone(), 'yyyy-MM');
+        yearMonth = Utilities.formatDate(leaveStartDate, 'Asia/Taipei', 'yyyy-MM');
       } else if (typeof leaveStartDate === 'string') {
         yearMonth = String(leaveStartDate).substring(0, 7);
       }
@@ -868,10 +868,10 @@ function reviewLeaveRequest(sessionToken, rowNumber, reviewAction, comment) {
       const endDateTime = record[6];
       const isApproved = (reviewAction === 'approve');
       const startDateStr = leaveStartDate instanceof Date
-        ? Utilities.formatDate(leaveStartDate, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+        ? Utilities.formatDate(leaveStartDate, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss')
         : String(leaveStartDate).substring(0, 19);
       const endDateStr = endDateTime instanceof Date
-        ? Utilities.formatDate(endDateTime, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+        ? Utilities.formatDate(endDateTime, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss')
         : String(endDateTime).substring(0, 19);
 
       notifyLeaveReview(
@@ -1027,7 +1027,8 @@ function addLeaveBalance(userId, leaveType, hours) {
       'OFFICIAL_LEAVE': 14,
       'WORK_INJURY_LEAVE': 15,
       'NATURAL_DISASTER_LEAVE': 16,
-      'COMP_TIME_OFF': 17
+      'COMP_TIME_OFF': 17,
+      'ABSENCE_WITHOUT_LEAVE': 18
     };
 
     const columnIndex = leaveTypeColumnMap[leaveType];
@@ -1218,12 +1219,98 @@ function getApprovedLeaveRecords(monthParam, userIdParam) {
 }
 
 /**
+ * ✅ 取得所有員工請假報表（管理員專用）
+ * params: token, yearMonth (YYYY-MM), userId (可選，省略代表全部)
+ */
+function handleGetAllLeaveReport(params) {
+  try {
+    if (!params.token) {
+      return { ok: false, msg: '缺少認證 token' };
+    }
+
+    const session = checkSession_(params.token);
+    if (!session.ok || !session.user) {
+      return { ok: false, code: 'ERR_SESSION_INVALID' };
+    }
+
+    if (session.user.dept !== '管理員') {
+      return { ok: false, code: 'ERR_PERMISSION_DENIED', msg: '需要管理員權限' };
+    }
+
+    const yearMonth = params.yearMonth;
+    if (!yearMonth) {
+      return { ok: false, msg: '缺少年月參數' };
+    }
+
+    const filterUserId = params.userId || null;
+
+    const sheet = getLeaveRecordsSheet();
+    const values = sheet.getDataRange().getValues();
+
+    if (values.length <= 1) {
+      return { ok: true, records: [] };
+    }
+
+    const records = [];
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      const employeeId = row[1];
+      const startDateTime = row[5];
+
+      // 過濾月份
+      try {
+        const startDate = new Date(startDateTime);
+        if (isNaN(startDate.getTime())) continue;
+        const rowMonth = Utilities.formatDate(startDate, 'Asia/Taipei', 'yyyy-MM');
+        if (rowMonth !== yearMonth) continue;
+      } catch (e) {
+        continue;
+      }
+
+      // 過濾員工（若指定）
+      if (filterUserId && employeeId !== filterUserId) continue;
+
+      records.push({
+        applyTime:     row[0] ? formatDateTime(row[0]) : '',
+        employeeId:    employeeId || '',
+        employeeName:  row[2] || '',
+        dept:          row[3] || '',
+        leaveType:     row[4] || '',
+        startDateTime: formatDateTime(row[5]),
+        endDateTime:   formatDateTime(row[6]),
+        workHours:     row[7] || 0,
+        days:          row[8] || 0,
+        reason:        row[9] || '',
+        status:        String(row[10] || 'PENDING').trim(),
+        reviewer:      row[11] || '',
+        reviewTime:    row[12] ? formatDateTime(row[12]) : '',
+        reviewComment: row[13] || ''
+      });
+    }
+
+    // 依員工姓名、開始時間排序
+    records.sort((a, b) => {
+      if (a.employeeName < b.employeeName) return -1;
+      if (a.employeeName > b.employeeName) return 1;
+      return new Date(a.startDateTime) - new Date(b.startDateTime);
+    });
+
+    return { ok: true, records: records };
+
+  } catch (error) {
+    Logger.log('❌ handleGetAllLeaveReport 錯誤: ' + error);
+    return { ok: false, msg: error.message };
+  }
+}
+
+/**
  * ✅ 格式化日期時間
  */
 function formatDateTime(date) {
   if (!date) return '';
   try {
-    return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    return Utilities.formatDate(date, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
   } catch (e) {
     return String(date);
   }
@@ -1235,7 +1322,7 @@ function formatDateTime(date) {
 function formatDate(date) {
   if (!date) return '';
   try {
-    return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return Utilities.formatDate(date, 'Asia/Taipei', 'yyyy-MM-dd');
   } catch (e) {
     return String(date);
   }
@@ -1449,7 +1536,7 @@ function updateAllEmployeesAnnualLeave() {
   const balanceSheet = getLeaveBalanceSheet();
   const balanceValues = balanceSheet.getDataRange().getValues();
   const today = new Date();
-  const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const todayStr = Utilities.formatDate(today, 'Asia/Taipei', 'yyyy-MM-dd');
 
   const todayMonth = today.getMonth();
   const todayDate = today.getDate();
@@ -1489,7 +1576,7 @@ function updateAllEmployeesAnnualLeave() {
     if (lastUpdateDate) {
       const lastUpdateStr = Utilities.formatDate(
         new Date(lastUpdateDate),
-        Session.getScriptTimeZone(),
+        'Asia/Taipei',
         'yyyy-MM-dd'
       );
       if (lastUpdateStr === todayStr) {

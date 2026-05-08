@@ -278,6 +278,12 @@
     "ADMIN_EXPORT_MONTH_LABEL": "選擇月份",
     "ADMIN_EXPORT_ALL_BTN": "匯出所有員工報表",
 
+    "LEAVE_REPORT_TITLE": "匯出請假紀錄報表",
+    "LEAVE_REPORT_DESCRIPTION": "匯出員工請假紀錄為 Excel 格式",
+    "BTN_EXPORT_LEAVE_REPORT": "匯出請假報表",
+    "LEAVE_REPORT_NO_DATA": "本月沒有請假紀錄",
+    "REVIEWER_LABEL": "審核人",
+
 
 
     "TAB_SHIFT": "排班",
