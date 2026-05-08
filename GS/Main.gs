@@ -134,8 +134,12 @@ function doGet(e) {
         return respond1(handleReviewWorklog(e.parameter));
       case "getWorklogReport":
         return respond1(handleGetWorklogReport(e.parameter));
-      case "getAllWorklogReport":  
+      case "getAllWorklogReport":
         return respond1(handleGetAllWorklogReport(e.parameter));
+      case "updateWorklog":
+        return respond1(handleUpdateWorklog(e.parameter));
+      case "deleteWorklog":
+        return respond1(handleDeleteWorklog(e.parameter));
       // ==================== 排班系統 ====================
       case "addShift":
         return respond1(handleAddShift(e.parameter));

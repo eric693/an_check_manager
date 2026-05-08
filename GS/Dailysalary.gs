@@ -401,21 +401,21 @@ function getEmployeeOvertimeForMonth(employeeId, yearMonth) {
     
     for (let i = 1; i < allData.length; i++) {
       const row = allData[i];
-      const recordEmployeeId = row[0];
-      const overtimeDate = row[2];
-      
-      if (recordEmployeeId === employeeId && 
-          overtimeDate && 
+      const recordEmployeeId = row[1];  // B: 員工ID（A 是申請ID）
+      const overtimeDate = row[3];      // D: 加班日期
+
+      if (recordEmployeeId === employeeId &&
+          overtimeDate &&
           overtimeDate.toString().startsWith(yearMonth)) {
         records.push({
-          '員工ID': row[0],
-          '員工姓名': row[1],
-          '加班日期': row[2],
-          '開始時間': row[3],
-          '結束時間': row[4],
-          '加班時數': row[5],
-          '申請原因': row[6],
-          '狀態': row[7]
+          '員工ID': row[1],    // B
+          '員工姓名': row[2],  // C
+          '加班日期': row[3],  // D
+          '開始時間': row[4],  // E
+          '結束時間': row[5],  // F
+          '加班時數': row[6],  // G
+          '申請原因': row[7],  // H
+          '狀態': row[9]       // J: 審核狀態（I 是申請時間）
         });
       }
     }
@@ -434,30 +434,33 @@ function getEmployeeOvertimeForMonth(employeeId, yearMonth) {
 function getEmployeeLeaveForMonth(employeeId, yearMonth) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('請假申請');
-    
+    // 請假記錄存在 '請假紀錄' 工作表（非 '請假申請'）
+    // 欄位: A=申請時間, B=員工ID, C=姓名, D=部門, E=假別,
+    //       F=開始時間, G=結束時間, H=工作時數, I=天數, J=原因, K=狀態
+    const sheet = ss.getSheetByName('請假紀錄');
+
     if (!sheet) return [];
-    
+
     const allData = sheet.getDataRange().getValues();
     const records = [];
-    
+
     for (let i = 1; i < allData.length; i++) {
       const row = allData[i];
-      const recordEmployeeId = row[0];
-      const startDate = row[3];
-      
-      if (recordEmployeeId === employeeId && 
-          startDate && 
+      const recordEmployeeId = row[1];  // B: 員工ID
+      const startDate = row[5];         // F: 開始時間
+
+      if (recordEmployeeId === employeeId &&
+          startDate &&
           startDate.toString().startsWith(yearMonth)) {
         records.push({
-          '員工ID': row[0],
-          '員工姓名': row[1],
-          '假別': row[2],
-          '開始日期': row[3],
-          '結束日期': row[4],
-          '天數': row[5],
-          '原因': row[6],
-          '狀態': row[7]
+          '員工ID': row[1],    // B
+          '員工姓名': row[2],  // C
+          '假別': row[4],      // E
+          '開始日期': row[5],  // F
+          '結束日期': row[6],  // G
+          '天數': row[8],      // I
+          '原因': row[9],      // J
+          '狀態': row[10]      // K
         });
       }
     }

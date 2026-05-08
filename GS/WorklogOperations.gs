@@ -725,3 +725,86 @@ function getAllWorklogReport(yearMonth) {
     return { success: false, message: error.message };
   }
 }
+
+// ==================== 更新 / 刪除 ====================
+
+/**
+ * 更新工作日誌（僅允許 PENDING 或 REJECTED 狀態）
+ */
+function updateWorklog(worklogId, userId, date, hours, content) {
+  try {
+    Logger.log('📝 updateWorklog: ' + worklogId);
+
+    const hoursNum = parseFloat(hours);
+    if (isNaN(hoursNum) || hoursNum <= 0 || hoursNum > 24) {
+      return { success: false, message: '工作時數必須在 0.5 ~ 24 小時之間' };
+    }
+    if (!content || content.trim().length < 10) {
+      return { success: false, message: '工作內容至少需要 10 個字' };
+    }
+
+    const sheet = getWorklogSheet();
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === worklogId) {
+        // 僅允許本人修改
+        if (String(data[i][1]).trim() !== userId) {
+          return { success: false, message: '無權修改此工作日誌' };
+        }
+        const status = data[i][7];
+        if (status === WORKLOG_STATUS.APPROVED) {
+          return { success: false, message: '已核准的日誌無法修改' };
+        }
+
+        sheet.getRange(i + 1, 5).setValue(date);             // E: 工作日期
+        sheet.getRange(i + 1, 6).setValue(hoursNum);         // F: 工作時數
+        sheet.getRange(i + 1, 7).setValue(content.trim());   // G: 工作內容
+        sheet.getRange(i + 1, 8).setValue(WORKLOG_STATUS.PENDING); // H: 重設為待審核
+
+        Logger.log('✅ 工作日誌更新完成');
+        return { success: true, message: '工作日誌已更新' };
+      }
+    }
+
+    return { success: false, message: '找不到工作日誌' };
+
+  } catch (error) {
+    Logger.log('❌ updateWorklog 錯誤: ' + error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * 刪除工作日誌（僅允許 PENDING 狀態）
+ */
+function deleteWorklog(worklogId, userId) {
+  try {
+    Logger.log('🗑️ deleteWorklog: ' + worklogId);
+
+    const sheet = getWorklogSheet();
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === worklogId) {
+        if (String(data[i][1]).trim() !== userId) {
+          return { success: false, message: '無權刪除此工作日誌' };
+        }
+        if (data[i][7] !== WORKLOG_STATUS.PENDING) {
+          return { success: false, message: '只能刪除待審核的工作日誌' };
+        }
+
+        sheet.deleteRow(i + 1);
+
+        Logger.log('✅ 工作日誌已刪除');
+        return { success: true, message: '工作日誌已刪除' };
+      }
+    }
+
+    return { success: false, message: '找不到工作日誌' };
+
+  } catch (error) {
+    Logger.log('❌ deleteWorklog 錯誤: ' + error);
+    return { success: false, message: error.message };
+  }
+}
