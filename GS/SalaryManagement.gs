@@ -1537,7 +1537,7 @@ function calculateHourlySalary(employeeId, yearMonth) {
           const deductionHours = days * dailyHours; // ⭐ 轉換為時數
           
           // ⭐ 病假：扣半薪（時薪 × 工時 × 50%）
-          if (leaveType === 'SICK_LEAVE' || leaveType === '病假') {
+          if (leaveType === 'SICK_LEAVE' || leaveType === '未住院病假') {
             sickLeaveHours += deductionHours; // ⭐ 累計時數
             const deduction = Math.round(hourlyRate * deductionHours * 0.5);
             sickLeaveDeduction += deduction;
@@ -2358,7 +2358,7 @@ function calculateMonthlySalaryInternal(employeeId, yearMonth) {
           const dailyRate = Math.round(baseSalary / 30);
           
           // 病假：扣半薪
-          if (leaveType === 'SICK_LEAVE' || leaveType === '病假') {
+          if (leaveType === 'SICK_LEAVE' || leaveType === '未住院病假') {
             sickLeaveHours += hours;
             const deduction = Math.round(days * dailyRate * 0.5);
             sickLeaveDeduction += deduction;
@@ -3627,8 +3627,8 @@ function fullTestEricSalary() {
   // 步驟 1：讀取請假記錄
   Logger.log('📋 步驟 1：讀取請假記錄');
   const leaveResult = getEmployeeMonthlyLeave(employeeId, yearMonth);
-  Logger.log(`   病假總天數: ${leaveResult.data.filter(r => r.leaveType.includes('SICK')).reduce((sum, r) => sum + r.leaveDays, 0)}`);
-  Logger.log(`   事假總天數: ${leaveResult.data.filter(r => r.leaveType.includes('PERSONAL')).reduce((sum, r) => sum + r.leaveDays, 0)}\n`);
+  Logger.log(`   病假總天數: ${leaveResult.data.filter(r => r.leaveType === 'SICK_LEAVE' || r.leaveType === '未住院病假').reduce((sum, r) => sum + r.leaveDays, 0)}`);
+  Logger.log(`   事假總天數: ${leaveResult.data.filter(r => r.leaveType === 'PERSONAL_LEAVE' || r.leaveType === '事假').reduce((sum, r) => sum + r.leaveDays, 0)}\n`);
   
   // 步驟 2：計算薪資
   Logger.log('📋 步驟 2：計算薪資');
