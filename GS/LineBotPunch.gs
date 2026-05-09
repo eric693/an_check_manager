@@ -6768,20 +6768,20 @@ function deductLeaveBalanceByUserId(userId, leaveType, hours) {
     const values = sheet.getDataRange().getValues();
     
     const leaveTypeColumnMap = {
-      'ANNUAL_LEAVE': 3,
-      'SICK_LEAVE': 4,
-      'PERSONAL_LEAVE': 5,
-      'BEREAVEMENT_LEAVE': 6,
-      'MARRIAGE_LEAVE': 7,
-      'MATERNITY_LEAVE': 8,
-      'PATERNITY_LEAVE': 9,
-      'HOSPITALIZATION_LEAVE': 10,
-      'MENSTRUAL_LEAVE': 11,
-      'FAMILY_CARE_LEAVE': 12,
-      'OFFICIAL_LEAVE': 13,
-      'WORK_INJURY_LEAVE': 14,
-      'NATURAL_DISASTER_LEAVE': 15,
-      'COMP_TIME_OFF': 16
+      '特休假': 3,
+      '未住院病假': 4,
+      '事假': 5,
+      '喪假': 6,
+      '婚假': 7,
+      '產假': 8,
+      '陪產檢及陪產假': 9,
+      '住院病假': 10,
+      '生理假': 11,
+      '家庭照顧假': 12,
+      '公假(含兵役假)': 13,
+      '公傷假': 14,
+      '天然災害停班': 15,
+      '加班補休假': 16
     };
     
     const columnIndex = leaveTypeColumnMap[leaveType];
@@ -6828,19 +6828,19 @@ function deductLeaveBalanceByUserId(userId, leaveType, hours) {
 function getLeaveTypeName(leaveType) {
   const names = {
     'ANNUAL_LEAVE': '特休假',
-    'SICK_LEAVE': '病假',
+    'SICK_LEAVE': '未住院病假',
     'PERSONAL_LEAVE': '事假',
     'BEREAVEMENT_LEAVE': '喪假',
     'MARRIAGE_LEAVE': '婚假',
     'MATERNITY_LEAVE': '產假',
-    'PATERNITY_LEAVE': '陪產假',
+    'PATERNITY_LEAVE': '陪產檢及陪產假',
     'HOSPITALIZATION_LEAVE': '住院病假',
     'MENSTRUAL_LEAVE': '生理假',
     'FAMILY_CARE_LEAVE': '家庭照顧假',
-    'OFFICIAL_LEAVE': '公假',
+    'OFFICIAL_LEAVE': '公假(含兵役假)',
     'WORK_INJURY_LEAVE': '公傷假',
     'NATURAL_DISASTER_LEAVE': '天然災害停班',
-    'COMP_TIME_OFF': '加班補休'
+    'COMP_TIME_OFF': '加班補休假'
   };
   
   return names[leaveType] || leaveType;

@@ -1,5 +1,26 @@
 // LeaveManagement.gs - 小時制請假系統（無時段限制版）
 
+function leaveTypeToDisplayName_(code) {
+  const map = {
+    'ANNUAL_LEAVE': '特休假',
+    'SICK_LEAVE': '未住院病假',
+    'PERSONAL_LEAVE': '事假',
+    'BEREAVEMENT_LEAVE': '喪假',
+    'MARRIAGE_LEAVE': '婚假',
+    'MATERNITY_LEAVE': '產假',
+    'PATERNITY_LEAVE': '陪產檢及陪產假',
+    'HOSPITALIZATION_LEAVE': '住院病假',
+    'MENSTRUAL_LEAVE': '生理假',
+    'FAMILY_CARE_LEAVE': '家庭照顧假',
+    'OFFICIAL_LEAVE': '公假(含兵役假)',
+    'WORK_INJURY_LEAVE': '公傷假',
+    'NATURAL_DISASTER_LEAVE': '天然災害停班',
+    'COMP_TIME_OFF': '加班補休假',
+    'ABSENCE_WITHOUT_LEAVE': '曠工'
+  };
+  return map[code] || code;
+}
+
 function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime, reason) {
   try {
     Logger.log('═══════════════════════════════════════');
@@ -163,7 +184,7 @@ function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime,
       user.userId || '',           // B: 員工ID
       user.name || '',             // C: 姓名
       user.dept || '',             // D: 部門
-      leaveType || '',             // E: 假別
+      leaveTypeToDisplayName_(leaveType) || '',  // E: 假別
       formattedStartDateTime,      // F: 開始時間
       formattedEndDateTime,        // G: 結束時間
       workHours,                   // H: 工作時數
@@ -191,7 +212,7 @@ function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime,
     try {
       notifyAdminsNewLeaveRequest(
         user.name,
-        leaveType,
+        leaveTypeToDisplayName_(leaveType),
         formattedStartDateTime,
         formattedEndDateTime,
         workHours,
@@ -925,25 +946,25 @@ function deductLeaveBalance(userId, leaveType, hours) {
     const values = sheet.getDataRange().getValues();
     
     const leaveTypeColumnMap = {
-      'ANNUAL_LEAVE': 4,
-      'SICK_LEAVE': 5,
-      'PERSONAL_LEAVE': 6,
-      'BEREAVEMENT_LEAVE': 7,
-      'MARRIAGE_LEAVE': 8,
-      'MATERNITY_LEAVE': 9,
-      'PATERNITY_LEAVE': 10,
-      'HOSPITALIZATION_LEAVE': 11,
-      'MENSTRUAL_LEAVE': 12,
-      'FAMILY_CARE_LEAVE': 13,
-      'OFFICIAL_LEAVE': 14,
-      'WORK_INJURY_LEAVE': 15,
-      'NATURAL_DISASTER_LEAVE': 16,
-      'COMP_TIME_OFF': 17,
-      'ABSENCE_WITHOUT_LEAVE': 18
+      '特休假': 4,
+      '未住院病假': 5,
+      '事假': 6,
+      '喪假': 7,
+      '婚假': 8,
+      '產假': 9,
+      '陪產檢及陪產假': 10,
+      '住院病假': 11,
+      '生理假': 12,
+      '家庭照顧假': 13,
+      '公假(含兵役假)': 14,
+      '公傷假': 15,
+      '天然災害停班': 16,
+      '加班補休假': 17,
+      '曠工': 18
     };
-    
+
     const columnIndex = leaveTypeColumnMap[leaveType];
-    
+
     if (!columnIndex) {
       Logger.log('❌ 無效的假別: ' + leaveType);
       return {
@@ -1014,21 +1035,21 @@ function addLeaveBalance(userId, leaveType, hours) {
     const values = sheet.getDataRange().getValues();
 
     const leaveTypeColumnMap = {
-      'ANNUAL_LEAVE': 4,
-      'SICK_LEAVE': 5,
-      'PERSONAL_LEAVE': 6,
-      'BEREAVEMENT_LEAVE': 7,
-      'MARRIAGE_LEAVE': 8,
-      'MATERNITY_LEAVE': 9,
-      'PATERNITY_LEAVE': 10,
-      'HOSPITALIZATION_LEAVE': 11,
-      'MENSTRUAL_LEAVE': 12,
-      'FAMILY_CARE_LEAVE': 13,
-      'OFFICIAL_LEAVE': 14,
-      'WORK_INJURY_LEAVE': 15,
-      'NATURAL_DISASTER_LEAVE': 16,
-      'COMP_TIME_OFF': 17,
-      'ABSENCE_WITHOUT_LEAVE': 18
+      '特休假': 4,
+      '未住院病假': 5,
+      '事假': 6,
+      '喪假': 7,
+      '婚假': 8,
+      '產假': 9,
+      '陪產檢及陪產假': 10,
+      '住院病假': 11,
+      '生理假': 12,
+      '家庭照顧假': 13,
+      '公假(含兵役假)': 14,
+      '公傷假': 15,
+      '天然災害停班': 16,
+      '加班補休假': 17,
+      '曠工': 18
     };
 
     const columnIndex = leaveTypeColumnMap[leaveType];

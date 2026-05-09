@@ -335,7 +335,7 @@ function reviewOvertimeRequest(sessionToken, rowNumber, action, comment) {
       // 若員工選擇補休，自動將加班時數累加至補休餘額
       if (compensationType === 'comp_leave') {
         try {
-          const addResult = addLeaveBalance(employeeId, 'COMP_TIME_OFF', parseFloat(hours) || 0);
+          const addResult = addLeaveBalance(employeeId, '加班補休假', parseFloat(hours) || 0);
           if (addResult.ok) {
             Logger.log(`✅ 已增加 ${employeeName} 的補休餘額 ${hours} 小時（新餘額: ${addResult.newBalance}）`);
           } else {
