@@ -93,42 +93,60 @@ function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime,
       };
     }
 
-    Logger.log('🔍 檢查是否為整點時間...');
+    Logger.log('🔍 檢查是否為整點或半點時間...');
 
     const startMinutes = start.getMinutes();
     const startSeconds = start.getSeconds();
     const endMinutes = end.getMinutes();
     const endSeconds = end.getSeconds();
 
-    if (startMinutes !== 0 || startSeconds !== 0) {
-      Logger.log(`❌ 開始時間不是整點: ${start.toISOString()}`);
+    if (startMinutes % 30 !== 0 || startSeconds !== 0) {
+      Logger.log(`❌ 開始時間不是整點或半點: ${start.toISOString()}`);
       return {
         ok: false,
         code: "ERR_INVALID_TIME_FORMAT",
-        msg: "開始時間必須是整點（例如：09:00, 10:00）"
+        msg: "開始時間必須是整點或半點（例如：09:00, 09:30）"
       };
     }
 
-    if (endMinutes !== 0 || endSeconds !== 0) {
-      Logger.log(`❌ 結束時間不是整點: ${end.toISOString()}`);
+    if (endMinutes % 30 !== 0 || endSeconds !== 0) {
+      Logger.log(`❌ 結束時間不是整點或半點: ${end.toISOString()}`);
       return {
         ok: false,
         code: "ERR_INVALID_TIME_FORMAT",
-        msg: "結束時間必須是整點（例如：09:00, 10:00）"
+        msg: "結束時間必須是整點或半點（例如：09:00, 09:30）"
       };
     }
 
-    Logger.log('✅ 時間格式檢查通過（整點）');
+    Logger.log('✅ 時間格式檢查通過（整點或半點）');
     Logger.log('');
 
     Logger.log('💡 計算工作時數和天數（無時段限制）...');
     
     const { workHours, days } = calculateWorkHoursAndDays_Unlimited(start, end);
-    
+
     Logger.log(`   工作時數: ${workHours} 小時`);
     Logger.log(`   天數: ${days} 天`);
     Logger.log('');
-    
+
+    if (workHours < 0.5) {
+      Logger.log(`❌ 請假時數不足0.5小時: ${workHours}`);
+      return {
+        ok: false,
+        code: "ERR_INSUFFICIENT_HOURS",
+        msg: `請假時數最少為 0.5 小時（目前為 ${workHours} 小時）`
+      };
+    }
+
+    if (workHours % 0.5 !== 0) {
+      Logger.log(`❌ 請假時數不是0.5的倍數: ${workHours}`);
+      return {
+        ok: false,
+        code: "ERR_INVALID_HOURS",
+        msg: `請假時數必須是 0.5 的倍數（目前為 ${workHours} 小時）`
+      };
+    }
+
     Logger.log('🔍 檢查假期餘額...');
     const balance = getLeaveBalance(sessionToken);
     
