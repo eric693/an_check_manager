@@ -229,30 +229,29 @@ function updateWorkHoursPreview() {
 function quickSelectTimeRange(type) {
     console.log(' 快速選擇:', type);
     
-    const now = new Date();
     const today = getTodayStr(); // YYYY-MM-DD
     
     let startTime, endTime;
     
     switch(type) {
         case '1h':
-            startTime = `${today}T09:00`;
-            endTime = `${today}T10:00`;
+            startTime = `${today}T11:00`;
+            endTime = `${today}T12:00`;
             break;
-            
+
         case '2h':
-            startTime = `${today}T09:00`;
-            endTime = `${today}T11:00`;
+            startTime = `${today}T11:00`;
+            endTime = `${today}T13:00`;
             break;
-            
+
         case '4h':
-            startTime = `${today}T13:00`;
-            endTime = `${today}T17:00`;
+            startTime = `${today}T11:00`;
+            endTime = `${today}T15:00`;
             break;
-            
+
         case '8h':
-            startTime = `${today}T09:00`;
-            endTime = `${today}T18:00`;
+            startTime = `${today}T11:00`;
+            endTime = `${today}T19:00`;
             break;
             
         default:
