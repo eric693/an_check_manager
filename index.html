@@ -195,21 +195,66 @@
                             打卡專區
                         </h2>
                         <p data-i18n="PUNCH_SECTION_DESC"
-                        class="text-gray-500 dark:text-gray-400 mb-4">
+                        class="text-gray-500 dark:text-gray-400 mb-2">
                             請點擊下方按鈕進行上班或下班打卡。
                         </p>
-                        <div class="flex space-x-4">
-                            <button id="punch-in-btn" 
-                                    data-i18n="BTN_PUNCH_IN"
-                                    class="flex-1 py-3 rounded-lg font-bold btn-primary">
-                                上班打卡
+
+                        <!-- 打卡方式切換 -->
+                        <div id="punch-method-tabs" class="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 mb-4">
+                            <button id="punch-tab-gps"
+                                    onclick="switchPunchTab('gps')"
+                                    class="flex-1 py-2 text-sm font-semibold transition-colors punch-tab-btn punch-tab-active">
+                                📍 GPS 打卡
                             </button>
-                            <button id="punch-out-btn" 
-                                    data-i18n="BTN_PUNCH_OUT"
-                                    class="flex-1 py-3 rounded-lg font-bold btn-secondary">
-                                下班打卡
+                            <button id="punch-tab-wifi"
+                                    onclick="switchPunchTab('wifi')"
+                                    class="flex-1 py-2 text-sm font-semibold transition-colors punch-tab-btn">
+                                WiFi 打卡
                             </button>
                         </div>
+
+                        <!-- GPS 打卡按鈕 -->
+                        <div id="gps-punch-area">
+                            <div class="flex space-x-4">
+                                <button id="punch-in-btn"
+                                        data-i18n="BTN_PUNCH_IN"
+                                        class="flex-1 py-3 rounded-lg font-bold btn-primary">
+                                    上班打卡
+                                </button>
+                                <button id="punch-out-btn"
+                                        data-i18n="BTN_PUNCH_OUT"
+                                        class="flex-1 py-3 rounded-lg font-bold btn-secondary">
+                                    下班打卡
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- WiFi 打卡按鈕 -->
+                        <div id="wifi-punch-area" class="hidden">
+                            <div id="wifi-location-select-wrapper" class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    選擇 WiFi 網路
+                                </label>
+                                <select id="wifi-location-select"
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white">
+                                    <option value="">-- 載入中... --</option>
+                                </select>
+                            </div>
+                            <div class="flex space-x-4">
+                                <button id="wifi-punch-in-btn"
+                                        class="flex-1 py-3 rounded-lg font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors">
+                                    上班打卡
+                                </button>
+                                <button id="wifi-punch-out-btn"
+                                        class="flex-1 py-3 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors">
+                                    下班打卡
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                                ⚠️ 請確認您已連上對應的 WiFi 網路
+                            </p>
+                        </div>
+
                         <!-- 生物辨識快速打卡區 -->
                         <div id="biometric-punch-section" class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                             <div class="flex items-center justify-between mb-3">
@@ -1356,6 +1401,121 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- WiFi 打卡地點管理（管理員） -->
+                    <div id="wifi-location-card" class="card p-6 mt-6" style="display:none;">
+                        <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                            📶 WiFi 打卡地點管理
+                        </h2>
+                        <p class="text-gray-500 dark:text-gray-400 mb-4">
+                            新增允許 WiFi 打卡的網路名稱（SSID）。員工需確認連接相同 WiFi 才能打卡。
+                        </p>
+
+                        <!-- 打卡方式設定 -->
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                打卡方式設定
+                            </label>
+                            <select id="punch-method-setting"
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-800 dark:text-white mb-2">
+                                <option value="gps">僅 GPS 定位打卡</option>
+                                <option value="wifi">僅 WiFi 打卡</option>
+                                <option value="both" selected>GPS 或 WiFi（兩者皆可）</option>
+                            </select>
+                            <button id="save-punch-method-btn"
+                                    class="w-full py-2 px-4 rounded-lg font-bold bg-blue-600 hover:bg-blue-700 text-white text-sm transition-colors">
+                                儲存打卡方式
+                            </button>
+                        </div>
+
+                        <!-- 新增 WiFi 地點 -->
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    地點名稱（顯示名稱）
+                                </label>
+                                <input type="text"
+                                       id="wifi-location-name"
+                                       placeholder="例如：台北辦公室"
+                                       class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    WiFi 網路名稱（SSID）
+                                </label>
+                                <input type="text"
+                                       id="wifi-location-ssid"
+                                       placeholder="例如：Office_WiFi_5G"
+                                       class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    備註（選填）
+                                </label>
+                                <input type="text"
+                                       id="wifi-location-note"
+                                       placeholder="例如：5樓網路"
+                                       class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white">
+                            </div>
+                            <button id="add-wifi-location-btn"
+                                    class="w-full py-3 px-4 rounded-lg font-bold btn-primary">
+                                新增 WiFi 地點
+                            </button>
+                        </div>
+
+                        <!-- WiFi 地點列表 -->
+                        <div class="mt-4">
+                            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">已登記的 WiFi 地點</h3>
+                            <ul id="wifi-locations-list" class="space-y-2">
+                                <li class="text-sm text-gray-400">載入中...</li>
+                            </ul>
+                        </div>
+
+                        <!-- IP 驗證設定 -->
+                        <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+                            <h3 class="text-base font-semibold text-gray-800 dark:text-white mb-1">🔒 IP 驗證</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                啟用後，WiFi 打卡時將驗證員工的對外 IP 是否為公司固定 IP。
+                            </p>
+                            <div class="flex items-center gap-3 mb-4">
+                                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">IP 驗證</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="ip-check-toggle" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer
+                                                dark:bg-gray-600 peer-checked:after:translate-x-full
+                                                peer-checked:after:border-white after:content-['']
+                                                after:absolute after:top-[2px] after:left-[2px]
+                                                after:bg-white after:border-gray-300 after:border
+                                                after:rounded-full after:h-5 after:w-5 after:transition-all
+                                                peer-checked:bg-indigo-600"></div>
+                                </label>
+                                <button id="save-ip-check-btn"
+                                        class="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors">
+                                    儲存
+                                </button>
+                            </div>
+                            <!-- 新增允許 IP -->
+                            <div class="space-y-2 mb-3">
+                                <div class="flex gap-2">
+                                    <input type="text" id="allowed-ip-name"
+                                           placeholder="名稱（例如：台北辦公室）"
+                                           class="flex-1 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white">
+                                    <input type="text" id="allowed-ip-address"
+                                           placeholder="IP（例如：203.0.113.10）"
+                                           class="flex-1 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white">
+                                </div>
+                                <button id="add-allowed-ip-btn"
+                                        class="w-full py-2 px-4 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white text-sm transition-colors">
+                                    新增允許 IP
+                                </button>
+                            </div>
+                            <!-- 允許 IP 清單 -->
+                            <ul id="allowed-ips-list" class="space-y-1">
+                                <li class="text-xs text-gray-400">載入中...</li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <!-- 在管理員頁面的適當位置加入 -->
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
                         <div class="flex items-center justify-between mb-4">

@@ -64,6 +64,33 @@ html.dark .main-image {
     background-color: #d1d5db;
 }
 
+/* --- Punch Tab Buttons --- */
+.punch-tab-btn {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+.punch-tab-btn:hover {
+    background-color: #e5e7eb;
+}
+.punch-tab-active {
+    background-color: #4f46e5;
+    color: white;
+}
+html.dark .punch-tab-btn {
+    background-color: #374151;
+    color: #9ca3af;
+}
+html.dark .punch-tab-btn:hover {
+    background-color: #4b5563;
+}
+html.dark .punch-tab-active {
+    background-color: #4f46e5;
+    color: white;
+}
+
 /* --- Warning Button --- */
 .btn-warning {
     /* Tailwind: bg-orange-500 */

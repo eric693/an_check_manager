@@ -1162,6 +1162,234 @@ function getLocation() {
   return { ok: true, locations: locations };
 }
 
+// ==================== WiFi 打卡地點管理 ====================
+
+/**
+ * 新增 WiFi 打卡地點
+ */
+function addWifiLocation(name, ssid, note) {
+  if (!name || !ssid) {
+    return { ok: false, code: "ERR_INVALID_INPUT" };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_WIFI_LOCATIONS);
+
+  // 若工作表不存在則自動建立
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_WIFI_LOCATIONS);
+    sh.appendRow(['ID', '地點名稱', 'WiFi SSID', '備註']);
+  }
+
+  sh.appendRow(['', name, ssid.trim(), note || '']);
+  Logger.log('✅ 新增 WiFi 地點：' + name + '，SSID：' + ssid);
+  return { ok: true, code: "WIFI_LOCATION_ADD_SUCCESS" };
+}
+
+/**
+ * 取得所有 WiFi 打卡地點
+ */
+function getWifiLocations() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_WIFI_LOCATIONS);
+  if (!sh || sh.getLastRow() < 2) {
+    return { ok: true, locations: [] };
+  }
+
+  const values = sh.getDataRange().getValues();
+  values.shift(); // 移除標頭列
+  const locations = values
+    .filter(row => row[1] && row[2])
+    .map((row, i) => ({
+      rowIndex: i + 2,
+      id: row[0] || '',
+      name: row[1] || '',
+      ssid: row[2] || '',
+      note: row[3] || ''
+    }));
+
+  return { ok: true, locations: locations };
+}
+
+/**
+ * 刪除 WiFi 打卡地點（by row index）
+ */
+function deleteWifiLocation(rowIndex) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_WIFI_LOCATIONS);
+  if (!sh) return { ok: false, code: "ERR_SHEET_NOT_FOUND" };
+
+  const idx = parseInt(rowIndex);
+  if (isNaN(idx) || idx < 2) return { ok: false, code: "ERR_INVALID_ROW" };
+
+  sh.deleteRow(idx);
+  Logger.log('🗑️ 刪除 WiFi 地點，行號：' + idx);
+  return { ok: true, code: "WIFI_LOCATION_DELETE_SUCCESS" };
+}
+
+// ==================== IP 驗證管理 ====================
+
+/**
+ * 新增允許的 IP 地址
+ */
+function addAllowedIp(name, ip, note) {
+  if (!name || !ip) return { ok: false, code: "ERR_INVALID_INPUT" };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_ALLOWED_IPS);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_ALLOWED_IPS);
+    sh.appendRow(['ID', '名稱', 'IP 地址', '備註']);
+  }
+  sh.appendRow(['', name, ip.trim(), note || '']);
+  Logger.log('✅ 新增允許 IP：' + ip);
+  return { ok: true, code: "IP_ADD_SUCCESS" };
+}
+
+/**
+ * 取得所有允許的 IP 清單
+ */
+function getAllowedIps() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ALLOWED_IPS);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, ips: [] };
+
+  const values = sh.getDataRange().getValues();
+  values.shift();
+  const ips = values
+    .filter(row => row[1] && row[2])
+    .map((row, i) => ({
+      rowIndex: i + 2,
+      id: row[0] || '',
+      name: row[1] || '',
+      ip: row[2] || '',
+      note: row[3] || ''
+    }));
+  return { ok: true, ips: ips };
+}
+
+/**
+ * 刪除允許的 IP（by row index）
+ */
+function deleteAllowedIp(rowIndex) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ALLOWED_IPS);
+  if (!sh) return { ok: false, code: "ERR_SHEET_NOT_FOUND" };
+  const idx = parseInt(rowIndex);
+  if (isNaN(idx) || idx < 2) return { ok: false, code: "ERR_INVALID_ROW" };
+  sh.deleteRow(idx);
+  return { ok: true, code: "IP_DELETE_SUCCESS" };
+}
+
+/**
+ * 檢查 IP 是否在允許清單內
+ */
+function isIpAllowed(ip) {
+  const result = getAllowedIps();
+  if (!result.ips || result.ips.length === 0) return false;
+  return result.ips.some(entry => entry.ip.trim() === ip.trim());
+}
+
+/**
+ * 取得 IP 驗證開關狀態
+ */
+function getIpCheckEnabled() {
+  const val = PropertiesService.getScriptProperties().getProperty(PROP_IP_CHECK_ENABLED);
+  return { ok: true, enabled: val === 'true' };
+}
+
+/**
+ * 設定 IP 驗證開關
+ */
+function setIpCheckEnabled(enabled) {
+  const val = (enabled === true || enabled === 'true') ? 'true' : 'false';
+  PropertiesService.getScriptProperties().setProperty(PROP_IP_CHECK_ENABLED, val);
+  Logger.log('✅ IP 驗證設定為：' + val);
+  return { ok: true, enabled: val === 'true' };
+}
+
+/**
+ * WiFi 打卡（員工確認連接特定 SSID）
+ */
+function punchWifi(sessionToken, type, ssid, note, clientIp) {
+  const employee = checkSession_(sessionToken);
+  const user = employee.user;
+  if (!user) return { ok: false, code: "ERR_SESSION_INVALID" };
+
+  // IP 驗證（如果啟用）
+  const ipCheck = getIpCheckEnabled();
+  if (ipCheck.enabled) {
+    if (!clientIp) return { ok: false, code: "ERR_IP_REQUIRED" };
+    if (!isIpAllowed(clientIp)) {
+      Logger.log('⛔ IP 驗證失敗：' + clientIp);
+      return { ok: false, code: "ERR_IP_NOT_AUTHORIZED" };
+    }
+  }
+
+  // 驗證 SSID 是否為已登記的 WiFi 地點
+  const result = getWifiLocations();
+  const matched = result.locations.find(loc => loc.ssid.trim() === ssid.trim());
+
+  if (!matched) {
+    return { ok: false, code: "ERR_WIFI_NOT_AUTHORIZED" };
+  }
+
+  const locationName = matched.name;
+
+  // 防重複：同一天同類型只能打一次
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+  const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+  const attendanceValues = sh.getDataRange().getValues();
+
+  for (let i = 1; i < attendanceValues.length; i++) {
+    const row = attendanceValues[i];
+    if (!row[0]) continue;
+    const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
+    const rowUserId = String(row[1]).trim();
+    const rowType = String(row[4]).trim();
+    const rowNote = String(row[7] || '').trim();
+    if (rowNote === '補打卡') continue;
+    if (rowDate === today && rowUserId === user.userId && rowType === type) {
+      return { ok: false, code: "ERR_DUPLICATE_PUNCH", msg: '今天已經打過' + type + '卡，請勿重複打卡' };
+    }
+  }
+
+  // 寫入打卡記錄
+  const punchRow = [
+    new Date(),
+    user.userId,
+    user.dept,
+    user.name,
+    type,
+    'WiFi:' + ssid,
+    locationName,
+    '',
+    '',
+    note || 'WiFi打卡'
+  ];
+  sh.getRange(sh.getLastRow() + 1, 1, 1, punchRow.length).setValues([punchRow]);
+
+  Logger.log('✅ WiFi打卡成功: ' + user.name + ' - ' + type + ' - ' + ssid);
+  return { ok: true, code: "PUNCH_SUCCESS", params: { type: type, location: locationName } };
+}
+
+/**
+ * 取得打卡方式設定
+ */
+function getPunchMethod() {
+  const props = PropertiesService.getScriptProperties();
+  const method = props.getProperty(PROP_PUNCH_METHOD) || 'both';
+  return { ok: true, method: method };
+}
+
+/**
+ * 設定打卡方式（'gps' | 'wifi' | 'both'）
+ */
+function setPunchMethod(method) {
+  if (!['gps', 'wifi', 'both'].includes(method)) {
+    return { ok: false, code: "ERR_INVALID_METHOD" };
+  }
+  PropertiesService.getScriptProperties().setProperty(PROP_PUNCH_METHOD, method);
+  Logger.log('✅ 打卡方式已設定為：' + method);
+  return { ok: true, method: method };
+}
+
 // ==================== 審核功能 ====================
 
 /**

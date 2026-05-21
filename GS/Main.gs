@@ -46,7 +46,31 @@ function doGet(e) {
         return respond1(handleAddLocation(e.parameter));
       case "getLocations":
         return respond1(handleGetLocation());
-      
+
+      // ==================== WiFi 打卡 ====================
+      case "punchWifi":
+        return respond1(handlePunchWifi(e.parameter));
+      case "addWifiLocation":
+        return respond1(handleAddWifiLocation(e.parameter));
+      case "getWifiLocations":
+        return respond1(handleGetWifiLocations(e.parameter));
+      case "deleteWifiLocation":
+        return respond1(handleDeleteWifiLocation(e.parameter));
+      case "getPunchMethod":
+        return respond1(handleGetPunchMethod(e.parameter));
+      case "setPunchMethod":
+        return respond1(handleSetPunchMethod(e.parameter));
+      case "addAllowedIp":
+        return respond1(handleAddAllowedIp(e.parameter));
+      case "getAllowedIps":
+        return respond1(handleGetAllowedIps(e.parameter));
+      case "deleteAllowedIp":
+        return respond1(handleDeleteAllowedIp(e.parameter));
+      case "getIpCheckEnabled":
+        return respond1(handleGetIpCheckEnabled(e.parameter));
+      case "setIpCheckEnabled":
+        return respond1(handleSetIpCheckEnabled(e.parameter));
+
       case "setEmployeeBasicInfo":
         return respond1(handleSetEmployeeBasicInfo(e.parameter));
 

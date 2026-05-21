@@ -134,6 +134,92 @@ function handlePunch(params) {
   return punch(token, type, parseFloat(lat), parseFloat(lng), note);
 }
 
+// ==================== WiFi 打卡相關 ====================
+
+function handlePunchWifi(params) {
+  const { token, type, ssid, note, clientIp } = params;
+  if (!token || !type || !ssid) {
+    return { ok: false, code: "ERR_MISSING_PARAMS" };
+  }
+  return punchWifi(token, type, ssid, note, clientIp);
+}
+
+function handleAddAllowedIp(params) {
+  const { token, name, ip, note } = params;
+  if (!token || !validateSession(token)) return { ok: false, msg: "未授權或 session 已過期" };
+  const session = checkSession_(token);
+  if (!session.ok || !session.user || session.user.dept !== '管理員') return { ok: false, msg: "需要管理員權限" };
+  return addAllowedIp(name, ip, note);
+}
+
+function handleGetAllowedIps(params) {
+  return getAllowedIps();
+}
+
+function handleDeleteAllowedIp(params) {
+  const { token, rowIndex } = params;
+  if (!token || !validateSession(token)) return { ok: false, msg: "未授權或 session 已過期" };
+  const session = checkSession_(token);
+  if (!session.ok || !session.user || session.user.dept !== '管理員') return { ok: false, msg: "需要管理員權限" };
+  return deleteAllowedIp(rowIndex);
+}
+
+function handleGetIpCheckEnabled(params) {
+  return getIpCheckEnabled();
+}
+
+function handleSetIpCheckEnabled(params) {
+  const { token, enabled } = params;
+  if (!token || !validateSession(token)) return { ok: false, msg: "未授權或 session 已過期" };
+  const session = checkSession_(token);
+  if (!session.ok || !session.user || session.user.dept !== '管理員') return { ok: false, msg: "需要管理員權限" };
+  return setIpCheckEnabled(enabled);
+}
+
+function handleAddWifiLocation(params) {
+  const { token, name, ssid, note } = params;
+  if (!token || !validateSession(token)) {
+    return { ok: false, msg: "未授權或 session 已過期" };
+  }
+  const session = checkSession_(token);
+  if (!session.ok || !session.user || session.user.dept !== '管理員') {
+    return { ok: false, msg: "需要管理員權限" };
+  }
+  return addWifiLocation(name, ssid, note);
+}
+
+function handleGetWifiLocations(params) {
+  return getWifiLocations();
+}
+
+function handleDeleteWifiLocation(params) {
+  const { token, rowIndex } = params;
+  if (!token || !validateSession(token)) {
+    return { ok: false, msg: "未授權或 session 已過期" };
+  }
+  const session = checkSession_(token);
+  if (!session.ok || !session.user || session.user.dept !== '管理員') {
+    return { ok: false, msg: "需要管理員權限" };
+  }
+  return deleteWifiLocation(rowIndex);
+}
+
+function handleGetPunchMethod(params) {
+  return getPunchMethod();
+}
+
+function handleSetPunchMethod(params) {
+  const { token, method } = params;
+  if (!token || !validateSession(token)) {
+    return { ok: false, msg: "未授權或 session 已過期" };
+  }
+  const session = checkSession_(token);
+  if (!session.ok || !session.user || session.user.dept !== '管理員') {
+    return { ok: false, msg: "需要管理員權限" };
+  }
+  return setPunchMethod(method);
+}
+
 // function handleAdjustPunch(params) {
 //   const { token, type, lat, lng, note, datetime } = params;
 //   const punchDate = datetime ? new Date(datetime) : new Date();

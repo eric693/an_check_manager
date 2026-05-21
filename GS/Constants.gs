@@ -23,6 +23,16 @@ const SHEET_OVERTIME_RECORDS = '加班紀錄';
 const SHEET_LEAVE_RECORDS = '請假紀錄';
 const SHEET_LEAVE_BALANCE = '假期餘額';
 
+// WiFi 打卡系統
+const SHEET_WIFI_LOCATIONS = 'WiFi打卡地點';
+// 打卡方式設定 key（儲存於 ScriptProperties）：'gps' | 'wifi' | 'both'
+const PROP_PUNCH_METHOD = 'PUNCH_METHOD';
+
+// IP 驗證系統
+const SHEET_ALLOWED_IPS = '允許IP清單';
+// IP 驗證開關 key（儲存於 ScriptProperties）：'true' | 'false'
+const PROP_IP_CHECK_ENABLED = 'IP_CHECK_ENABLED';
+
 // ==================== 工作表名稱（新增）====================
 // const SHEET_WORKLOG = '工作日誌';
 

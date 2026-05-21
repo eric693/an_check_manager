@@ -436,16 +436,18 @@ async function ensureLogin()
         // 直接顯示 UI（不等待 API）
         if (user.dept === "管理員") {
           document.getElementById('tab-admin-btn').style.display = 'block';
+          const wifiCard = document.getElementById('wifi-location-card');
+          if (wifiCard) { wifiCard.style.display = 'block'; loadWifiLocationsList(); loadIpCheckSetting(); loadAllowedIpsList(); }
         }
-        
+
         document.getElementById("user-name").textContent = user.name;
         document.getElementById("profile-img").src = user.picture;
         localStorage.setItem("sessionUserId", user.userId);
-        
+
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('user-header').style.display = 'flex';
         document.getElementById('main-app').style.display = 'block';
-        
+
         // 背景驗證（不阻塞 UI）
         checkSessionInBackground(token);
         
@@ -471,12 +473,14 @@ async function ensureLogin()
           
           if (res.user.dept === "管理員") {
             document.getElementById('tab-admin-btn').style.display = 'block';
+            const wifiCard = document.getElementById('wifi-location-card');
+            if (wifiCard) { wifiCard.style.display = 'block'; loadWifiLocationsList(); loadIpCheckSetting(); loadAllowedIpsList(); }
           }
-          
+
           document.getElementById("user-name").textContent = res.user.name;
           document.getElementById("profile-img").src = res.user.picture || res.user.rate;
           localStorage.setItem("sessionUserId", res.user.userId);
-          
+
           showNotification(t("LOGIN_SUCCESS"));
           
           document.getElementById('login-section').style.display = 'none';
@@ -2294,8 +2298,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 if (res.user.dept === "管理員") {
                   document.getElementById('tab-admin-btn').style.display = 'block';
+                  const wifiCard = document.getElementById('wifi-location-card');
+                  if (wifiCard) { wifiCard.style.display = 'block'; loadWifiLocationsList(); loadIpCheckSetting(); loadAllowedIpsList(); }
                 }
-                
+
                 document.getElementById("user-name").textContent = res.user.name;
                 document.getElementById("profile-img").src = res.user.picture;
                 
@@ -2420,6 +2426,113 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     punchInBtn.addEventListener('click', () => doPunch("上班"));
     punchOutBtn.addEventListener('click', () => doPunch("下班"));
+
+    // WiFi 打卡按鈕
+    const wifiPunchInBtn = document.getElementById('wifi-punch-in-btn');
+    const wifiPunchOutBtn = document.getElementById('wifi-punch-out-btn');
+    if (wifiPunchInBtn) wifiPunchInBtn.addEventListener('click', () => doPunchWifi('上班'));
+    if (wifiPunchOutBtn) wifiPunchOutBtn.addEventListener('click', () => doPunchWifi('下班'));
+
+    // 初始化打卡方式設定
+    loadPunchMethodSetting();
+
+    // 管理員：儲存打卡方式
+    const savePunchMethodBtn = document.getElementById('save-punch-method-btn');
+    if (savePunchMethodBtn) {
+        savePunchMethodBtn.addEventListener('click', async () => {
+            const method = document.getElementById('punch-method-setting')?.value;
+            if (!method) return;
+            generalButtonState(savePunchMethodBtn, 'processing', '儲存中...');
+            try {
+                const res = await callApifetch(`setPunchMethod&method=${encodeURIComponent(method)}`);
+                if (res.ok) {
+                    showNotification('打卡方式已儲存', 'success');
+                    loadPunchMethodSetting();
+                } else {
+                    showNotification('儲存失敗：' + res.msg, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                generalButtonState(savePunchMethodBtn, 'idle');
+            }
+        });
+    }
+
+    // 管理員：新增 WiFi 地點
+    const addWifiLocationBtn = document.getElementById('add-wifi-location-btn');
+    if (addWifiLocationBtn) {
+        addWifiLocationBtn.addEventListener('click', async () => {
+            const name = document.getElementById('wifi-location-name')?.value?.trim();
+            const ssid = document.getElementById('wifi-location-ssid')?.value?.trim();
+            const note = document.getElementById('wifi-location-note')?.value?.trim();
+            if (!name || !ssid) {
+                showNotification('請填寫地點名稱與 WiFi SSID', 'error');
+                return;
+            }
+            generalButtonState(addWifiLocationBtn, 'processing', '新增中...');
+            try {
+                const res = await callApifetch(`addWifiLocation&name=${encodeURIComponent(name)}&ssid=${encodeURIComponent(ssid)}&note=${encodeURIComponent(note || '')}`);
+                if (res.ok) {
+                    showNotification('WiFi 地點新增成功', 'success');
+                    document.getElementById('wifi-location-name').value = '';
+                    document.getElementById('wifi-location-ssid').value = '';
+                    document.getElementById('wifi-location-note').value = '';
+                    loadWifiLocationsList();
+                } else {
+                    showNotification('新增失敗：' + res.msg, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                generalButtonState(addWifiLocationBtn, 'idle');
+            }
+        });
+    }
+
+    // 管理員：IP 驗證開關儲存
+    const saveIpCheckBtn = document.getElementById('save-ip-check-btn');
+    if (saveIpCheckBtn) {
+        saveIpCheckBtn.addEventListener('click', async () => {
+            const enabled = document.getElementById('ip-check-toggle')?.checked;
+            generalButtonState(saveIpCheckBtn, 'processing', '儲存中...');
+            try {
+                const res = await callApifetch(`setIpCheckEnabled&enabled=${enabled}`);
+                if (res.ok) showNotification('IP 驗證設定已儲存', 'success');
+                else showNotification('儲存失敗：' + res.msg, 'error');
+            } catch (err) {
+                console.error(err);
+            } finally {
+                generalButtonState(saveIpCheckBtn, 'idle');
+            }
+        });
+    }
+
+    // 管理員：新增允許 IP
+    const addAllowedIpBtn = document.getElementById('add-allowed-ip-btn');
+    if (addAllowedIpBtn) {
+        addAllowedIpBtn.addEventListener('click', async () => {
+            const name = document.getElementById('allowed-ip-name')?.value?.trim();
+            const ip = document.getElementById('allowed-ip-address')?.value?.trim();
+            if (!name || !ip) { showNotification('請填寫名稱與 IP 地址', 'error'); return; }
+            generalButtonState(addAllowedIpBtn, 'processing', '新增中...');
+            try {
+                const res = await callApifetch(`addAllowedIp&name=${encodeURIComponent(name)}&ip=${encodeURIComponent(ip)}`);
+                if (res.ok) {
+                    showNotification('IP 新增成功', 'success');
+                    document.getElementById('allowed-ip-name').value = '';
+                    document.getElementById('allowed-ip-address').value = '';
+                    loadAllowedIpsList();
+                } else {
+                    showNotification('新增失敗：' + res.msg, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                generalButtonState(addAllowedIpBtn, 'idle');
+            }
+        });
+    }
 
     // 處理補打卡表單
     abnormalList.addEventListener('click', (e) => {
@@ -4148,11 +4261,226 @@ async function doPunch(type) {
 function getTimeDifference(time1, time2) {
     const [h1, m1] = time1.split(':').map(Number);
     const [h2, m2] = time2.split(':').map(Number);
-    
+
     const minutes1 = h1 * 60 + m1;
     const minutes2 = h2 * 60 + m2;
-    
+
     return minutes1 - minutes2;
+}
+
+// ==================== WiFi 打卡 ====================
+
+async function getClientIp() {
+    try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        return data.ip || '';
+    } catch (err) {
+        console.warn('取得 IP 失敗:', err);
+        return '';
+    }
+}
+
+function switchPunchTab(tab) {
+    const gpsArea = document.getElementById('gps-punch-area');
+    const wifiArea = document.getElementById('wifi-punch-area');
+    const gpsBtn = document.getElementById('punch-tab-gps');
+    const wifiBtn = document.getElementById('punch-tab-wifi');
+    if (!gpsArea || !wifiArea) return;
+
+    if (tab === 'gps') {
+        gpsArea.classList.remove('hidden');
+        wifiArea.classList.add('hidden');
+        gpsBtn?.classList.add('punch-tab-active');
+        gpsBtn?.classList.remove('punch-tab-inactive');
+        wifiBtn?.classList.remove('punch-tab-active');
+        wifiBtn?.classList.add('punch-tab-inactive');
+    } else {
+        gpsArea.classList.add('hidden');
+        wifiArea.classList.remove('hidden');
+        wifiBtn?.classList.add('punch-tab-active');
+        wifiBtn?.classList.remove('punch-tab-inactive');
+        gpsBtn?.classList.remove('punch-tab-active');
+        gpsBtn?.classList.add('punch-tab-inactive');
+        loadWifiLocations();
+    }
+}
+
+async function loadWifiLocations() {
+    const select = document.getElementById('wifi-location-select');
+    if (!select) return;
+    try {
+        const res = await callApifetch('getWifiLocations');
+        select.innerHTML = '';
+        if (res.ok && res.locations && res.locations.length > 0) {
+            res.locations.forEach(loc => {
+                const opt = document.createElement('option');
+                opt.value = loc.ssid;
+                opt.textContent = `${loc.name} (${loc.ssid})`;
+                select.appendChild(opt);
+            });
+        } else {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '目前無可用 WiFi 地點';
+            select.appendChild(opt);
+        }
+    } catch (err) {
+        console.error('loadWifiLocations 失敗:', err);
+    }
+}
+
+let _isWifiPunching = false;
+
+async function doPunchWifi(type) {
+    if (_isWifiPunching) {
+        showNotification('打卡處理中，請勿重複點擊', 'warning');
+        return;
+    }
+    _isWifiPunching = true;
+
+    const btnId = type === '上班' ? 'wifi-punch-in-btn' : 'wifi-punch-out-btn';
+    const button = document.getElementById(btnId);
+    const select = document.getElementById('wifi-location-select');
+
+    if (!select || !select.value) {
+        showNotification('請先選擇您目前連線的 WiFi 地點', 'error');
+        _isWifiPunching = false;
+        return;
+    }
+
+    generalButtonState(button, 'processing', '處理中...');
+
+    try {
+        const ssid = select.value;
+        const clientIp = await getClientIp();
+        const res = await callApifetch(`punchWifi&type=${encodeURIComponent(type)}&ssid=${encodeURIComponent(ssid)}&clientIp=${encodeURIComponent(clientIp)}&note=${encodeURIComponent('WiFi打卡')}`);
+        const msg = t(res.code || 'UNKNOWN_ERROR', res.params || {});
+        showNotification(msg, res.ok ? 'success' : 'error');
+    } catch (err) {
+        console.error('WiFi 打卡失敗:', err);
+        showNotification('WiFi 打卡失敗，請稍後再試', 'error');
+    } finally {
+        generalButtonState(button, 'idle');
+        _isWifiPunching = false;
+    }
+}
+
+async function loadPunchMethodSetting() {
+    try {
+        const res = await callApifetch('getPunchMethod');
+        if (res.ok) {
+            const method = res.method || 'both';
+            const sel = document.getElementById('punch-method-setting');
+            if (sel) sel.value = method;
+
+            const tabsEl = document.getElementById('punch-method-tabs');
+            if (method === 'gps') {
+                if (tabsEl) tabsEl.style.display = 'none';
+                switchPunchTab('gps');
+            } else if (method === 'wifi') {
+                if (tabsEl) tabsEl.style.display = 'none';
+                switchPunchTab('wifi');
+            } else {
+                if (tabsEl) tabsEl.style.display = 'flex';
+                switchPunchTab('gps');
+            }
+        }
+    } catch (err) {
+        console.error('loadPunchMethodSetting 失敗:', err);
+    }
+}
+
+async function loadWifiLocationsList() {
+    const listEl = document.getElementById('wifi-locations-list');
+    if (!listEl) return;
+    try {
+        const res = await callApifetch('getWifiLocations');
+        listEl.innerHTML = '';
+        if (res.ok && res.locations && res.locations.length > 0) {
+            res.locations.forEach(loc => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700';
+                li.innerHTML = `
+                    <div>
+                        <span class="font-medium text-gray-800 dark:text-gray-100">${loc.name}</span>
+                        <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">${loc.ssid}</span>
+                        ${loc.note ? `<span class="ml-2 text-xs text-gray-400">${loc.note}</span>` : ''}
+                    </div>
+                    <button class="delete-wifi-loc-btn text-red-500 hover:text-red-700 text-sm px-2 py-1" data-row="${loc.rowIndex}">刪除</button>
+                `;
+                listEl.appendChild(li);
+            });
+            listEl.querySelectorAll('.delete-wifi-loc-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const rowIndex = btn.dataset.row;
+                    if (!confirm('確定要刪除此 WiFi 地點嗎？')) return;
+                    try {
+                        const res = await callApifetch(`deleteWifiLocation&rowIndex=${rowIndex}`);
+                        if (res.ok) {
+                            showNotification('WiFi 地點已刪除', 'success');
+                            loadWifiLocationsList();
+                        } else {
+                            showNotification('刪除失敗：' + res.msg, 'error');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                });
+            });
+        } else {
+            listEl.innerHTML = '<li class="text-gray-400 py-2">尚未新增任何 WiFi 地點</li>';
+        }
+    } catch (err) {
+        console.error('loadWifiLocationsList 失敗:', err);
+    }
+}
+
+// ==================== IP 驗證管理（前端）====================
+
+async function loadIpCheckSetting() {
+    try {
+        const res = await callApifetch('getIpCheckEnabled');
+        const toggle = document.getElementById('ip-check-toggle');
+        if (toggle && res.ok) toggle.checked = res.enabled;
+    } catch (err) {
+        console.error('loadIpCheckSetting 失敗:', err);
+    }
+}
+
+async function loadAllowedIpsList() {
+    const listEl = document.getElementById('allowed-ips-list');
+    if (!listEl) return;
+    try {
+        const res = await callApifetch('getAllowedIps');
+        listEl.innerHTML = '';
+        if (res.ok && res.ips && res.ips.length > 0) {
+            res.ips.forEach(entry => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between py-1 border-b border-gray-100 dark:border-gray-700';
+                li.innerHTML = `
+                    <div class="text-sm">
+                        <span class="font-medium text-gray-800 dark:text-gray-100">${entry.name}</span>
+                        <span class="ml-2 font-mono text-gray-500 dark:text-gray-400">${entry.ip}</span>
+                    </div>
+                    <button class="delete-ip-btn text-red-500 hover:text-red-700 text-xs px-2 py-1" data-row="${entry.rowIndex}">刪除</button>
+                `;
+                listEl.appendChild(li);
+            });
+            listEl.querySelectorAll('.delete-ip-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (!confirm('確定要刪除此 IP？')) return;
+                    const res = await callApifetch(`deleteAllowedIp&rowIndex=${btn.dataset.row}`);
+                    if (res.ok) { showNotification('IP 已刪除', 'success'); loadAllowedIpsList(); }
+                    else showNotification('刪除失敗：' + res.msg, 'error');
+                });
+            });
+        } else {
+            listEl.innerHTML = '<li class="text-xs text-gray-400 py-1">尚未新增任何允許 IP</li>';
+        }
+    } catch (err) {
+        console.error('loadAllowedIpsList 失敗:', err);
+    }
 }
 
 /**
