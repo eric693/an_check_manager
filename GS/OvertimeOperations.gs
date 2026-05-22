@@ -39,8 +39,8 @@ function calculateOvertimeHoursFromTimes_(startTimeStr, endTimeStr) {
   const endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
   let diffMin = endMin - startMin;
   if (diffMin < 0) diffMin += 24 * 60;
-  if (diffMin > 30) {
-    return Math.floor((diffMin - 30) / 30) * 0.5;
+  if (diffMin >= 30) {
+    return Math.floor(diffMin / 30) * 0.5;
   }
   return 0;
 }
