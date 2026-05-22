@@ -1164,6 +1164,13 @@ function handleLineLocation(event) {
     Logger.log('   座標: ' + lat + ', ' + lng);
     Logger.log('   title: ' + locationTitle);
 
+    const punchMethod = (getPunchMethod().method || 'both');
+    if (punchMethod === 'wifi') {
+      replyMessage(replyToken, '目前僅開放 WiFi 打卡，無法使用 GPS 打卡');
+      clearPunchIntent_(userId);
+      return;
+    }
+
     // ✅ 防搜尋偽造：只允許「當前位置」，拒絕搜尋/釘選的地點
     // 當使用者分享當前 GPS 位置時，LINE 的 title 為空字串或固定關鍵字；
     // 若 title 是具體地點名稱，代表使用搜尋結果，應予拒絕。
@@ -7352,6 +7359,12 @@ function sendWifiLocationMenu(replyToken, employeeName, punchType) {
 function handleLineWifiPunch(event, userId, employee, text) {
   const replyToken = event.replyToken;
   try {
+    const punchMethod = (getPunchMethod().method || 'both');
+    if (punchMethod === 'gps') {
+      replyMessage(replyToken, '目前僅開放 GPS 打卡，無法使用 WiFi 打卡');
+      return;
+    }
+
     const parts = text.split(':');
     if (parts.length < 3) {
       replyMessage(replyToken, '❌ 格式錯誤，請重新選擇打卡方式');
@@ -7399,7 +7412,7 @@ function handleLineWifiPunch(event, userId, employee, text) {
     // 寫入打卡記錄
     const now = new Date();
     const time = Utilities.formatDate(now, 'Asia/Taipei', 'HH:mm:ss');
-    const punchRow = [now, userId, employee.dept, employee.name, punchType, 'WiFi:' + ssid, matched.name, '', '', 'LINE WiFi打卡'];
+    const punchRow = [now, userId, employee.dept, employee.name, punchType, 'WiFi:' + ssid, matched.name, 'LINE Bot', '', 'LINE WiFi打卡'];
     sh.getRange(sh.getLastRow() + 1, 1, 1, punchRow.length).setValues([punchRow]);
 
     clearPunchIntent_(userId);
