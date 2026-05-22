@@ -29,18 +29,26 @@ function handleLineMessage(event) {
       sendPunchMethodMenu(replyToken, employee.name, '下班');
     }
     else if (text === '上班打卡GPS') {
+      const m = (getPunchMethod().method || 'both');
+      if (m === 'wifi') { replyMessage(replyToken, '目前僅開放 WiFi 打卡，無法使用 GPS 打卡'); return; }
       savePunchIntent_(userId, '上班');
       sendQuickReplyLocationRequest(replyToken, employee.name, '上班');
     }
     else if (text === '下班打卡GPS') {
+      const m = (getPunchMethod().method || 'both');
+      if (m === 'wifi') { replyMessage(replyToken, '目前僅開放 WiFi 打卡，無法使用 GPS 打卡'); return; }
       savePunchIntent_(userId, '下班');
       sendQuickReplyLocationRequest(replyToken, employee.name, '下班');
     }
     else if (text === '上班打卡WiFi') {
+      const m = (getPunchMethod().method || 'both');
+      if (m === 'gps') { replyMessage(replyToken, '目前僅開放 GPS 打卡，無法使用 WiFi 打卡'); return; }
       savePunchIntent_(userId, '上班');
       sendWifiLocationMenu(replyToken, employee.name, '上班');
     }
     else if (text === '下班打卡WiFi') {
+      const m = (getPunchMethod().method || 'both');
+      if (m === 'gps') { replyMessage(replyToken, '目前僅開放 GPS 打卡，無法使用 WiFi 打卡'); return; }
       savePunchIntent_(userId, '下班');
       sendWifiLocationMenu(replyToken, employee.name, '下班');
     }
@@ -852,7 +860,7 @@ function sendQuickReplyLocationRequest(replyToken, employeeName, punchType) {
           type: 'action',
           action: {
             type: 'location',
-            label: '📍 傳送位置打卡'
+            label: '傳送位置打卡'
           }
         }
       ]
@@ -878,7 +886,7 @@ function sendPunchLocationRequestWithConfirm(replyToken, employeeName, punchType
         contents: [
           {
             type: 'text',
-            text: `📍 ${punchType}打卡`,
+            text: `${punchType}打卡`,
             weight: 'bold',
             size: 'xl',
             color: '#FFFFFF'
@@ -992,7 +1000,7 @@ function sendPunchLocationRequestWithConfirm(replyToken, employeeName, punchType
             height: 'sm',
             action: {
               type: 'uri',
-              label: '📍 傳送位置',
+              label: '傳送位置',
               uri: 'line://nv/location'  // ✅ 正確！會直接跳出系統對話框
             },
             color: punchType === '上班' ? '#4CAF50' : '#FF9800'
@@ -7262,14 +7270,14 @@ function sendPunchMethodMenu(replyToken, employeeName, punchType) {
               type: 'button',
               style: 'primary',
               margin: 'lg',
-              action: { type: 'message', label: '📍 GPS 定位打卡', text: punchType + '打卡GPS' },
+              action: { type: 'message', label: 'GPS 定位打卡', text: punchType + '打卡GPS' },
               color: '#2196F3'
             },
             {
               type: 'button',
               style: 'primary',
               margin: 'sm',
-              action: { type: 'message', label: '📶 WiFi 打卡', text: punchType + '打卡WiFi' },
+              action: { type: 'message', label: 'WiFi 打卡', text: punchType + '打卡WiFi' },
               color: '#9C27B0'
             }
           ]
@@ -7299,7 +7307,7 @@ function sendWifiLocationMenu(replyToken, employeeName, punchType) {
     margin: 'sm',
     action: {
       type: 'message',
-      label: '📶 ' + loc.name,
+      label: loc.name,
       text: 'WiFi打卡:' + punchType + ':' + loc.ssid + ':' + loc.name
     }
   }));
@@ -7315,7 +7323,7 @@ function sendWifiLocationMenu(replyToken, employeeName, punchType) {
         layout: 'vertical',
         contents: [{
           type: 'text',
-          text: '📶 WiFi ' + punchType + '打卡',
+          text: 'WiFi ' + punchType + '打卡',
           weight: 'bold',
           size: 'xl',
           color: '#FFFFFF'
