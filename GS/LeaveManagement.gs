@@ -431,13 +431,36 @@ function getLeaveBalance(sessionToken) {
           ABSENCE_WITHOUT_LEAVE: toHours(values[i][17])
         };
 
-        // ⭐ 格式化到職日
+        // 格式化到職日
         if (balance.hireDate) {
           balance.hireDate = formatDate(balance.hireDate);
         }
-        Logger.log('📋 假期餘額（小時）:');
+
+        // 特休假使用期限（依到職週年日計算）
+        if (balance.hireDate) {
+          try {
+            const leaveInfo = getCurrentAnnualLeaveInfo(balance.hireDate);
+            if (leaveInfo.periodEnd) {
+              balance.annualLeaveExpiry = formatDate(leaveInfo.periodEnd);
+              balance.annualLeavePeriodStart = leaveInfo.periodStart
+                ? formatDate(leaveInfo.periodStart) : null;
+            }
+          } catch (e) {
+            Logger.log('計算特休使用期限失敗: ' + e.message);
+          }
+        }
+
+        // 年度性假別使用期限（每年 12 月 31 日歸零）
+        const todayForExpiry = new Date();
+        balance.calendarYearExpiry = Utilities.formatDate(
+          new Date(todayForExpiry.getFullYear(), 11, 31),
+          'Asia/Taipei',
+          'yyyy-MM-dd'
+        );
+
+        Logger.log('假期餘額（小時）:');
         Logger.log(JSON.stringify(balance, null, 2));
-        
+
         return {
           ok: true,
           balance: balance

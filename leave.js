@@ -470,11 +470,11 @@ async function loadLeaveBalance() {
 function renderLeaveBalance(balance) {
     const listEl = document.getElementById('leave-balance-list');
     if (!listEl) return;
-    
-    console.log(' 開始渲染假期餘額:', balance);
-    
+
+    console.log('開始渲染假期餘額:', balance);
+
     listEl.innerHTML = '';
-    
+
     const leaveOrder = [
         'ANNUAL_LEAVE', 'COMP_TIME_OFF', 'PERSONAL_LEAVE', 'SICK_LEAVE',
         'HOSPITALIZATION_LEAVE', 'BEREAVEMENT_LEAVE', 'MARRIAGE_LEAVE',
@@ -482,31 +482,114 @@ function renderLeaveBalance(balance) {
         'WORK_INJURY_LEAVE', 'ABSENCE_WITHOUT_LEAVE', 'NATURAL_DISASTER_LEAVE',
         'FAMILY_CARE_LEAVE', 'MENSTRUAL_LEAVE'
     ];
-    
-    leaveOrder.forEach(leaveType => {
-        if (balance[leaveType] !== undefined) {
-            const item = document.createElement('div');
-            item.className = 'flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg';
-            
-            const typeSpan = document.createElement('span');
-            typeSpan.className = 'font-medium text-gray-800 dark:text-white';
-            typeSpan.textContent = t(leaveType);
-            
-            const hours = balance[leaveType];
-            
-            const hoursSpan = document.createElement('span');
-            hoursSpan.className = leaveType === 'ABSENCE_WITHOUT_LEAVE' 
-                ? 'text-red-600 dark:text-red-400 font-bold'
-                : 'text-indigo-600 dark:text-indigo-400 font-bold';
-            hoursSpan.textContent = `${hours} 小時`;
-            
-            item.appendChild(typeSpan);
-            item.appendChild(hoursSpan);
-            listEl.appendChild(item);
+
+    // 年度性假別（每年 12/31 到期）
+    const CALENDAR_YEAR_LEAVES = new Set([
+        'PERSONAL_LEAVE', 'SICK_LEAVE', 'HOSPITALIZATION_LEAVE',
+        'FAMILY_CARE_LEAVE', 'MENSTRUAL_LEAVE'
+    ]);
+
+    // 事由性假別（到期日視事由發生日而定，系統無法自動計算）
+    const EVENT_BASED_LEAVES = new Set([
+        'MARRIAGE_LEAVE', 'BEREAVEMENT_LEAVE', 'MATERNITY_LEAVE', 'PATERNITY_LEAVE'
+    ]);
+
+    function daysUntil(dateStr) {
+        if (!dateStr) return null;
+        const expiry = new Date(dateStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        expiry.setHours(0, 0, 0, 0);
+        return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function getExpiryInfo(leaveType) {
+        if (leaveType === 'ANNUAL_LEAVE' && balance.annualLeaveExpiry) {
+            return { dateStr: balance.annualLeaveExpiry, isEventBased: false };
         }
+        if (CALENDAR_YEAR_LEAVES.has(leaveType) && balance.calendarYearExpiry) {
+            return { dateStr: balance.calendarYearExpiry, isEventBased: false };
+        }
+        if (EVENT_BASED_LEAVES.has(leaveType)) {
+            return { dateStr: null, isEventBased: true };
+        }
+        return null;
+    }
+
+    leaveOrder.forEach(leaveType => {
+        if (balance[leaveType] === undefined) return;
+
+        const hours = balance[leaveType];
+        const expiryInfo = getExpiryInfo(leaveType);
+
+        const item = document.createElement('div');
+        item.className = 'p-3 bg-gray-50 dark:bg-gray-700 rounded-lg';
+
+        // 第一行：假別名稱 + 剩餘時數
+        const topRow = document.createElement('div');
+        topRow.className = 'flex justify-between items-center';
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = 'font-medium text-gray-800 dark:text-white';
+        typeSpan.textContent = t(leaveType);
+
+        const hoursSpan = document.createElement('span');
+        hoursSpan.className = leaveType === 'ABSENCE_WITHOUT_LEAVE'
+            ? 'text-red-600 dark:text-red-400 font-bold'
+            : 'text-indigo-600 dark:text-indigo-400 font-bold';
+        hoursSpan.textContent = `${hours} 小時`;
+
+        topRow.appendChild(typeSpan);
+        topRow.appendChild(hoursSpan);
+        item.appendChild(topRow);
+
+        // 第二行：使用期限（僅有餘額時顯示，曠工不顯示）
+        if (expiryInfo && leaveType !== 'ABSENCE_WITHOUT_LEAVE') {
+            const expiryRow = document.createElement('div');
+            expiryRow.className = 'mt-1';
+
+            if (expiryInfo.isEventBased) {
+                // 事由性假別：說明文字
+                if (hours > 0) {
+                    const noteSpan = document.createElement('span');
+                    noteSpan.className = 'text-xs text-gray-400 dark:text-gray-500';
+                    noteSpan.textContent = '使用期限：依事由發生日起算，請洽人資確認';
+                    expiryRow.appendChild(noteSpan);
+                    item.appendChild(expiryRow);
+                }
+            } else {
+                // 固定期限：顯示日期與倒數天數
+                const days = daysUntil(expiryInfo.dateStr);
+                const isUrgent = days !== null && days <= 30;
+                const isWarning = days !== null && days <= 90 && days > 30;
+
+                let colorClass = 'text-gray-400 dark:text-gray-500';
+                if (isUrgent) colorClass = 'text-red-500 dark:text-red-400 font-medium';
+                else if (isWarning) colorClass = 'text-amber-500 dark:text-amber-400';
+
+                const expirySpan = document.createElement('span');
+                expirySpan.className = `text-xs ${colorClass}`;
+
+                let label = `使用期限：${expiryInfo.dateStr}`;
+                if (days !== null && hours > 0) {
+                    if (days < 0) {
+                        label += '（已逾期）';
+                    } else if (days === 0) {
+                        label += '（今日到期）';
+                    } else {
+                        label += `（還有 ${days} 天）`;
+                    }
+                }
+                expirySpan.textContent = label;
+                expiryRow.appendChild(expirySpan);
+                item.appendChild(expiryRow);
+            }
+        }
+
+        listEl.appendChild(item);
     });
-    
-    console.log(' 假期餘額渲染完成');
+
+    console.log('假期餘額渲染完成');
 }
 
 /**
