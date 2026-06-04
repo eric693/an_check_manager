@@ -1081,12 +1081,17 @@ function formatHours(hours) {
 async function submitAdjustPunch(date, type, note) {
     try {
         showNotification("正在提交補打卡...", "info");
-        
+
+        if (!navigator.geolocation) {
+            showNotification("此裝置不支援定位功能", "error");
+            return;
+        }
+
         const sessionToken = localStorage.getItem("sessionToken");
-        
+
         // 取得當前位置
         const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject);
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
         
         const lat = position.coords.latitude;
@@ -1119,7 +1124,11 @@ async function submitAdjustPunch(date, type, note) {
         }
     } catch (err) {
         console.error('補打卡錯誤:', err);
-        showNotification("補打卡失敗", "error");
+        if (err.code === 1) {
+            showNotification("無法取得位置，請確認已開啟定位權限", "error");
+        } else {
+            showNotification("補打卡失敗，請稍後再試", "error");
+        }
     }
 }
 
@@ -5474,30 +5483,31 @@ let _isSubmittingToday = false;
  */
 async function submitAdjustToday() {
     if (_isSubmittingToday) { showNotification('處理中，請勿重複點擊', 'warning'); return; }
-    _isSubmittingToday = true;
     const typeSelect = document.getElementById('adjust-type-select');
     const timeInput = document.getElementById('adjust-time-input');
     const reasonInput = document.getElementById('adjust-reason-input');
     const submitBtn = document.getElementById('submit-adjust-today-btn');
-    
+
     const type = typeSelect.value;
     const time = timeInput.value;
     const reason = reasonInput.value.trim();
-    
+
     // 驗證
     if (!time) {
         showNotification('請選擇時間', 'error');
         return;
     }
-    
+
     if (!reason || reason.length < 2) {
         showNotification('請填寫修正理由（至少 2 個字）', 'error');
         return;
     }
-    
+
+    // 所有驗證通過後才鎖定
+    _isSubmittingToday = true;
     const loadingText = t('LOADING') || '處理中...';
     generalButtonState(submitBtn, 'processing', loadingText);
-    
+
     try {
         const sessionToken = localStorage.getItem("sessionToken");
         
@@ -5537,9 +5547,14 @@ async function submitAdjustToday() {
         
     } catch (err) {
         console.error('當日修正錯誤:', err);
-        showNotification('修正失敗', 'error');
-        
+        if (err.code === 1) {
+            showNotification('無法取得位置，請確認已開啟定位權限', 'error');
+        } else {
+            showNotification('修正失敗，請稍後再試', 'error');
+        }
+
     } finally {
+        _isSubmittingToday = false;
         generalButtonState(submitBtn, 'idle');
     }
 }
@@ -5669,73 +5684,72 @@ let _isSubmittingHistory = false;
  */
 async function submitHistoryAdjust() {
     if (_isSubmittingHistory) { showNotification('處理中，請勿重複點擊', 'warning'); return; }
-    _isSubmittingHistory = true;
     const dateInput = document.getElementById('history-adjust-date');
     const typeInput = document.getElementById('history-adjust-type');
     const timeInput = document.getElementById('history-adjust-time');
     const reasonInput = document.getElementById('history-adjust-reason');
     const submitBtn = document.getElementById('submit-history-adjust-btn');
-    
+
     const date = dateInput.value;
     const type = typeInput.value;
     const time = timeInput.value;
     const reason = reasonInput.value.trim();
-    
+
     // ===== 驗證 =====
-    
+
     // 1. 檢查日期
     if (!date) {
         showNotification('請選擇補打日期', 'error');
         dateInput.focus();
         return;
     }
-    
+
     // 2. 檢查類型
     if (!type) {
         showNotification('請選擇補打類型', 'error');
         typeInput.focus();
         return;
     }
-    
+
     // 3. 檢查時間
     if (!time) {
         showNotification('請選擇實際打卡時間', 'error');
         timeInput.focus();
         return;
     }
-    
+
     // 4. 檢查理由長度
-    if (reason.length < 10) {
-        showNotification('補打原因至少需要 10 個字，請詳細說明', 'error');
+    if (reason.length < 2) {
+        showNotification('補打原因至少需要 2 個字', 'error');
         reasonInput.focus();
         return;
     }
-    
+
     // 5. 驗證日期範圍（本月內且不能未來）
     const selectedDate = new Date(date);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     if (selectedDate < monthStart) {
         showNotification('只能補打本月的打卡記錄', 'error');
         return;
     }
-    
+
     if (selectedDate > today) {
         showNotification('不能補打未來的日期', 'error');
         return;
     }
-    
+
     // 6. 檢查是否是今天（提示使用當日修正）
     if (selectedDate.getTime() === today.getTime()) {
         if (!confirm('您選擇的是今天的日期，建議使用「當日異常修正」功能更快速。\n\n確定要繼續使用歷史補打卡嗎？')) {
             return;
         }
     }
-    
-    // ===== 提交 =====
-    
+
+    // ===== 提交 =====（所有驗證通過後才鎖定）
+    _isSubmittingHistory = true;
     const loadingText = '提交中...';
     generalButtonState(submitBtn, 'processing', loadingText);
     
@@ -5790,6 +5804,7 @@ async function submitHistoryAdjust() {
         }
         
     } finally {
+        _isSubmittingHistory = false;
         generalButtonState(submitBtn, 'idle');
     }
 }
