@@ -347,8 +347,8 @@ async function submitOvertimeRequest(overtimeDate, startTime, endTime, hours, re
             document.getElementById('overtime-end-time').value = '';
             document.getElementById('overtime-hours').value = '';
             document.getElementById('overtime-reason').value = '';
-            const payRadio = document.getElementById('comp-type-pay');
-            if (payRadio) payRadio.checked = true;
+            const compLeaveRadio = document.getElementById('comp-type-comp-leave');
+            if (compLeaveRadio) compLeaveRadio.checked = true;
             updateCompensationOptionStyle();
 
             await loadEmployeeOvertimeRecords();
