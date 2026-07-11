@@ -2674,14 +2674,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             try {
                 const sessionToken = localStorage.getItem("sessionToken");
-                
+
+                if (!navigator.geolocation) {
+                    showNotification('此裝置不支援定位功能', 'error');
+                    return;
+                }
+
                 const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject);
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
                 });
-                
+
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                
+
                 const params = new URLSearchParams({
                     token: sessionToken,
                     type: type,
@@ -2690,7 +2695,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     datetime: datetime,
                     note: reason
                 });
-                
+
                 const res = await callApifetch(`adjustPunch&${params.toString()}`);
                 console.log(' 前端提交補打卡:', {
                     type: type,
@@ -2698,7 +2703,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     reason: reason,
                     response: res
                 });
-                
+
                 if (res.ok) {
                     showNotification("補打卡申請成功！等待管理員審核", "success");
                     await checkAbnormal();
@@ -2706,11 +2711,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     showNotification(t(res.code) || "補打卡失敗", "error");
                 }
-                
+
             } catch (err) {
                 console.error('補打卡錯誤:', err);
-                showNotification("補打卡失敗", "error");
-                
+                if (err.code === 1) {
+                    showNotification('無法取得位置，請確認已開啟定位權限', 'error');
+                } else {
+                    showNotification('補打卡失敗，請稍後再試', 'error');
+                }
+
             } finally {
                 if (adjustmentFormContainer.innerHTML !== '') {
                     generalButtonState(button, 'idle');
@@ -4261,7 +4270,7 @@ async function doPunch(type) {
         showNotification(t("ERROR_GEOLOCATION", { msg: err.message }), "error");
         generalButtonState(button, 'idle');
         _isPunching = false;  //  釋放鎖（定位失敗也要釋放）
-    });
+    }, { timeout: 10000 });
 }
 
 /**
@@ -5511,14 +5520,19 @@ async function submitAdjustToday() {
     try {
         const sessionToken = localStorage.getItem("sessionToken");
         
+        if (!navigator.geolocation) {
+            showNotification('此裝置不支援定位功能', 'error');
+            return;
+        }
+
         // 取得當前位置
         const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject);
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
-        
+
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        
+
         // 組合完整日期時間
         const now = new Date();
         const today = getTodayStr();

@@ -294,38 +294,39 @@ async function submitLeaveApplication() {
         reason
     });
     
-    // 檢查假期餘額
-    try {
-        const balanceRes = await callApifetch('getLeaveBalance');
-        
-        if (balanceRes.ok && balanceRes.balance) {
-            const availableHours = balanceRes.balance[leaveType] || 0;
-            
-            console.log(` 假期餘額檢查:`, {
-                假別: leaveType,
-                可用小時: availableHours,
-                申請小時: workHours
-            });
-            
-            if (workHours > availableHours) {
-                showNotification(
-                    `餘額不足！${t(leaveType)} 剩餘 ${availableHours} 小時，但您申請了 ${workHours} 小時`,
-                    'error'
-                );
-                return;
-            }
-        }
-    } catch (error) {
-        console.error(' 檢查餘額失敗:', error);
-    }
-    
+    // 立即顯示處理中狀態（在任何網路請求之前，讓使用者馬上看到反饋）
     const button = document.getElementById('submit-leave-btn');
     if (button) {
         button.disabled = true;
         button.textContent = '處理中...';
     }
-    
+
     try {
+        // 檢查假期餘額
+        try {
+            const balanceRes = await callApifetch('getLeaveBalance');
+
+            if (balanceRes.ok && balanceRes.balance) {
+                const availableHours = balanceRes.balance[leaveType] || 0;
+
+                console.log(` 假期餘額檢查:`, {
+                    假別: leaveType,
+                    可用小時: availableHours,
+                    申請小時: workHours
+                });
+
+                if (workHours > availableHours) {
+                    showNotification(
+                        `餘額不足！${t(leaveType)} 剩餘 ${availableHours} 小時，但您申請了 ${workHours} 小時`,
+                        'error'
+                    );
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error(' 檢查餘額失敗:', error);
+        }
+
         const response = await callApifetch(
             `submitLeave&leaveType=${encodeURIComponent(leaveType)}` +
             `&startDateTime=${encodeURIComponent(startTime)}` +
