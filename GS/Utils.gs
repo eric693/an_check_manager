@@ -1,5 +1,18 @@
 // Utils.gs
 
+/**
+ * 取得打卡專用的腳本鎖，序列化「檢查重複→寫入」流程，
+ * 避免尖峰時段多人同時打卡時，併發寫入互相覆蓋或造成試算表存取排隊卡住。
+ * 用畢務必在 finally 區塊呼叫 lock.releaseLock()。
+ * @param {number} [timeoutMs=10000] 等待鎖的時間上限（毫秒），超過則拋出例外
+ * @returns {GoogleAppsScript.Lock.Lock}
+ */
+function acquirePunchLock_(timeoutMs) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(timeoutMs || 10000);
+  return lock;
+}
+
 function jsonp(e, obj) {
   const cb = e.parameter.callback || "callback";
   return ContentService.createTextOutput(cb + "(" + JSON.stringify(obj) + ")")

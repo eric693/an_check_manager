@@ -55,6 +55,7 @@ function writeEmployee_(profile) {
       sheet.getRange(i + 1, 8).setValue("啟用");
       
       Logger.log(`✅ 更新員工資料完成（保留原有權限：${values[i][5]}）`);
+      CacheService.getScriptCache().remove('EMP_' + employeeId);
       return values[i];
     }
   }
@@ -85,24 +86,33 @@ function writeEmployee_(profile) {
  * ✅ 修正版：優先使用手動設定的姓名
  */
 function findEmployeeByLineUserId_(userId) {
+  // 每則 LINE 訊息都會呼叫本函式，先查快取避免每次都整表掃描
+  // 造成尖峰時段（多人同時打卡）試算表讀取壅塞
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'EMP_' + userId;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_EMPLOYEES);
   const values = sh.getDataRange().getValues();
 
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0]).trim() === userId) {
-      
+
       // ⭐⭐⭐ 關鍵修正：優先使用 nameOverride
       const displayName = values[i][2];        // C 欄：displayName
       const nameOverride = values[i][8] || ""; // I 欄：nameOverride
-      
+
       const finalName = nameOverride || displayName; // 優先使用手動設定的姓名
-      
+
       Logger.log(`📋 查詢員工: ${userId}`);
       Logger.log(`   displayName: ${displayName}`);
       Logger.log(`   nameOverride: ${nameOverride}`);
       Logger.log(`   最終姓名: ${finalName}`);
-      
-      return {
+
+      const result = {
         ok: true,
         userId: values[i][0],        // ✅ LINE userId
         employeeId: values[i][0],    // ✅ 員工ID = LINE userId
@@ -112,9 +122,14 @@ function findEmployeeByLineUserId_(userId) {
         dept: values[i][5] || "管理員",
         status: values[i][7] || "啟用"
       };
+
+      // 快取 2 分鐘：足以吸收短時間內反覆點擊/多次訊息，
+      // 又不會讓管理員異動員工資料後過久才生效
+      cache.put(cacheKey, JSON.stringify(result), 120);
+      return result;
     }
   }
-  
+
   return { ok: false, code: "ERR_NO_DATA" };
 }
 
@@ -461,50 +476,58 @@ function punch(sessionToken, type, lat, lng, note) {
     return { ok: false, code: "ERR_OUT_OF_RANGE" };
   }
 
-  // 防重複：同一天同類型（上班/下班）只能打一次
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-  const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
-  const attendanceValues = sh.getDataRange().getValues();
+  // 🔒 用鎖把「檢查重複→寫入」包成一個原子操作，避免尖峰時段
+  // 多人同時打卡互相搶寫同一張表，也避免 getLastRow()+1 與其他
+  // 執行緒的寫入互相覆蓋
+  const lock = acquirePunchLock_(10000);
+  try {
+    // 防重複：同一天同類型（上班/下班）只能打一次
+    const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+    const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+    const attendanceValues = sh.getDataRange().getValues();
 
-  for (let i = 1; i < attendanceValues.length; i++) {
-    const row = attendanceValues[i];
-    if (!row[0]) continue;
+    for (let i = 1; i < attendanceValues.length; i++) {
+      const row = attendanceValues[i];
+      if (!row[0]) continue;
 
-    const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
-    const rowUserId = String(row[1]).trim();
-    const rowType = String(row[4]).trim();
-    const rowNote = String(row[7] || '').trim();
+      const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
+      const rowUserId = String(row[1]).trim();
+      const rowType = String(row[4]).trim();
+      const rowNote = String(row[7] || '').trim();
 
-    // 跳過補打卡記錄
-    if (rowNote === '補打卡') continue;
+      // 跳過補打卡記錄
+      if (rowNote === '補打卡') continue;
 
-    if (rowDate === today && rowUserId === user.userId && rowType === type) {
-      Logger.log('防重複: ' + user.name + ' 今天（' + today + '）已打 ' + type + ' 卡');
-      return {
-        ok: false,
-        code: "ERR_DUPLICATE_PUNCH",
-        msg: '今天已經打過' + type + '卡，請勿重複打卡'
-      };
+      if (rowDate === today && rowUserId === user.userId && rowType === type) {
+        Logger.log('防重複: ' + user.name + ' 今天（' + today + '）已打 ' + type + ' 卡');
+        return {
+          ok: false,
+          code: "ERR_DUPLICATE_PUNCH",
+          msg: '今天已經打過' + type + '卡，請勿重複打卡'
+        };
+      }
     }
+
+    // 寫入打卡記錄
+    const row = [
+      new Date(),
+      user.userId,
+      user.dept,
+      user.name,
+      type,
+      '(' + lat + ',' + lng + ')',
+      locationName,
+      "",
+      "",
+      note || ""
+    ];
+    sh.appendRow(row);
+
+    Logger.log('打卡成功: ' + user.name + ' - ' + type);
+    return { ok: true, code: "PUNCH_SUCCESS", params: { type: type } };
+  } finally {
+    lock.releaseLock();
   }
-
-  // 寫入打卡記錄
-  const row = [
-    new Date(),
-    user.userId,
-    user.dept,
-    user.name,
-    type,
-    '(' + lat + ',' + lng + ')',
-    locationName,
-    "",
-    "",
-    note || ""
-  ];
-  sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
-
-  Logger.log('打卡成功: ' + user.name + ' - ' + type);
-  return { ok: true, code: "PUNCH_SUCCESS", params: { type: type } };
 }
 
 
@@ -1332,41 +1355,49 @@ function punchWifi(sessionToken, type, ssid, note, clientIp) {
 
   const locationName = matched.name;
 
-  // 防重複：同一天同類型只能打一次
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-  const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
-  const attendanceValues = sh.getDataRange().getValues();
+  // 🔒 用鎖把「檢查重複→寫入」包成一個原子操作，避免尖峰時段
+  // 多人同時打卡互相搶寫同一張表，也避免 getLastRow()+1 與其他
+  // 執行緒的寫入互相覆蓋
+  const lock = acquirePunchLock_(10000);
+  try {
+    // 防重複：同一天同類型只能打一次
+    const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+    const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+    const attendanceValues = sh.getDataRange().getValues();
 
-  for (let i = 1; i < attendanceValues.length; i++) {
-    const row = attendanceValues[i];
-    if (!row[0]) continue;
-    const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
-    const rowUserId = String(row[1]).trim();
-    const rowType = String(row[4]).trim();
-    const rowNote = String(row[7] || '').trim();
-    if (rowNote === '補打卡') continue;
-    if (rowDate === today && rowUserId === user.userId && rowType === type) {
-      return { ok: false, code: "ERR_DUPLICATE_PUNCH", msg: '今天已經打過' + type + '卡，請勿重複打卡' };
+    for (let i = 1; i < attendanceValues.length; i++) {
+      const row = attendanceValues[i];
+      if (!row[0]) continue;
+      const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
+      const rowUserId = String(row[1]).trim();
+      const rowType = String(row[4]).trim();
+      const rowNote = String(row[7] || '').trim();
+      if (rowNote === '補打卡') continue;
+      if (rowDate === today && rowUserId === user.userId && rowType === type) {
+        return { ok: false, code: "ERR_DUPLICATE_PUNCH", msg: '今天已經打過' + type + '卡，請勿重複打卡' };
+      }
     }
+
+    // 寫入打卡記錄
+    const punchRow = [
+      new Date(),
+      user.userId,
+      user.dept,
+      user.name,
+      type,
+      'WiFi:' + ssid,
+      locationName,
+      '',
+      '',
+      note || 'WiFi打卡'
+    ];
+    sh.appendRow(punchRow);
+
+    Logger.log('✅ WiFi打卡成功: ' + user.name + ' - ' + type + ' - ' + ssid);
+    return { ok: true, code: "PUNCH_SUCCESS", params: { type: type, location: locationName } };
+  } finally {
+    lock.releaseLock();
   }
-
-  // 寫入打卡記錄
-  const punchRow = [
-    new Date(),
-    user.userId,
-    user.dept,
-    user.name,
-    type,
-    'WiFi:' + ssid,
-    locationName,
-    '',
-    '',
-    note || 'WiFi打卡'
-  ];
-  sh.getRange(sh.getLastRow() + 1, 1, 1, punchRow.length).setValues([punchRow]);
-
-  Logger.log('✅ WiFi打卡成功: ' + user.name + ' - ' + type + ' - ' + ssid);
-  return { ok: true, code: "PUNCH_SUCCESS", params: { type: type, location: locationName } };
 }
 
 /**

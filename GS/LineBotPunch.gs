@@ -1227,17 +1227,25 @@ function handleLineLocation(event) {
     }
     
     Logger.log('✅ 位置檢查通過: ' + locationCheck.locationName);
-    
-    // 🔧 新增：檢查是否為重複打卡
-    if (isDuplicatePunch_(userId, punchType)) {
-      Logger.log('⚠️ 重複打卡，已忽略');
-      replyMessage(replyToken, '⚠️ 您剛剛已經打過卡了，請勿重複操作');
-      clearPunchIntent_(userId);
-      return;
+
+    // 🔒 用鎖把「檢查重複→寫入」包成一個原子操作，避免尖峰時段
+    // 多次觸發（同一人連點或多人同時打卡）互相搶寫同一張表
+    let punchResult;
+    const lock = acquirePunchLock_(10000);
+    try {
+      // 🔧 新增：檢查是否為重複打卡
+      if (isDuplicatePunch_(userId, punchType)) {
+        Logger.log('⚠️ 重複打卡，已忽略');
+        replyMessage(replyToken, '⚠️ 您剛剛已經打過卡了，請勿重複操作');
+        clearPunchIntent_(userId);
+        return;
+      }
+      // 執行打卡
+      punchResult = executePunch(userId, punchType, lat, lng, locationCheck.locationName);
+    } finally {
+      lock.releaseLock();
     }
-    // 執行打卡
-    const punchResult = executePunch(userId, punchType, lat, lng, locationCheck.locationName);
-    
+
     if (punchResult.success) {
       const message = {
         type: 'flex',
@@ -7379,11 +7387,6 @@ function handleLineWifiPunch(event, userId, employee, text) {
       return;
     }
 
-    if (isDuplicatePunch_(userId, punchType)) {
-      replyMessage(replyToken, '⚠️ 您剛剛已經打過卡了，請勿重複操作');
-      return;
-    }
-
     const wifiResult = getWifiLocations();
     const matched = wifiResult.locations.find(loc => loc.ssid.trim() === ssid.trim());
     if (!matched) {
@@ -7391,29 +7394,42 @@ function handleLineWifiPunch(event, userId, employee, text) {
       return;
     }
 
-    // 防重複：同一天同類型只能打一次
-    const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-    const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
-    const attendanceValues = sh.getDataRange().getValues();
-    for (let i = 1; i < attendanceValues.length; i++) {
-      const row = attendanceValues[i];
-      if (!row[0]) continue;
-      const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
-      const rowUserId = String(row[1]).trim();
-      const rowType = String(row[4]).trim();
-      const rowNote = String(row[7] || '').trim();
-      if (rowNote === '補打卡') continue;
-      if (rowDate === today && rowUserId === userId && rowType === punchType) {
-        replyMessage(replyToken, '⚠️ 今天已經打過' + punchType + '卡，請勿重複打卡');
-        return;
-      }
-    }
-
-    // 寫入打卡記錄
+    // 🔒 用鎖把「檢查重複→寫入」包成一個原子操作，避免尖峰時段
+    // 多次觸發（同一人連點或多人同時打卡）互相搶寫同一張表，
+    // 也避免 getLastRow()+1 與其他執行緒的寫入互相覆蓋
     const now = new Date();
     const time = Utilities.formatDate(now, 'Asia/Taipei', 'HH:mm:ss');
-    const punchRow = [now, userId, employee.dept, employee.name, punchType, 'WiFi:' + ssid, matched.name, 'LINE Bot', '', 'LINE WiFi打卡'];
-    sh.getRange(sh.getLastRow() + 1, 1, 1, punchRow.length).setValues([punchRow]);
+    const lock = acquirePunchLock_(10000);
+    try {
+      if (isDuplicatePunch_(userId, punchType)) {
+        replyMessage(replyToken, '⚠️ 您剛剛已經打過卡了，請勿重複操作');
+        return;
+      }
+
+      // 防重複：同一天同類型只能打一次
+      const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+      const today = Utilities.formatDate(now, 'Asia/Taipei', 'yyyy-MM-dd');
+      const attendanceValues = sh.getDataRange().getValues();
+      for (let i = 1; i < attendanceValues.length; i++) {
+        const row = attendanceValues[i];
+        if (!row[0]) continue;
+        const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
+        const rowUserId = String(row[1]).trim();
+        const rowType = String(row[4]).trim();
+        const rowNote = String(row[7] || '').trim();
+        if (rowNote === '補打卡') continue;
+        if (rowDate === today && rowUserId === userId && rowType === punchType) {
+          replyMessage(replyToken, '⚠️ 今天已經打過' + punchType + '卡，請勿重複打卡');
+          return;
+        }
+      }
+
+      // 寫入打卡記錄
+      const punchRow = [now, userId, employee.dept, employee.name, punchType, 'WiFi:' + ssid, matched.name, 'LINE Bot', '', 'LINE WiFi打卡'];
+      sh.appendRow(punchRow);
+    } finally {
+      lock.releaseLock();
+    }
 
     clearPunchIntent_(userId);
 
