@@ -92,9 +92,23 @@ function checkAttendanceAbnormal(attendanceRows) {
     Logger.log(`📅 本月應檢查的日期數: ${allDatesInMonth.length}`);
   }
   
+  // ===== 步驟 2.5：取得該員工排休的日期，排休當天不提示補打卡 =====
+  const dayOffDates = new Set();
+  if (targetUserId) {
+    try {
+      const dayOffResult = getShifts({ employeeId: targetUserId, shiftType: '排休' });
+      if (dayOffResult && dayOffResult.success) {
+        dayOffResult.data.forEach(s => dayOffDates.add(s.date));
+      }
+    } catch (err) {
+      Logger.log('⚠️ 查詢排休班表失敗: ' + err.message);
+    }
+  }
+
   // ===== 步驟 3：檢查每一天的打卡狀態 =====
   if (targetUserId && targetMonth) {
     for (const date of allDatesInMonth) {
+      const isDayOff = dayOffDates.has(date);
       const dayRecords = dailyRecords[targetUserId]?.[date] || [];
       const filteredRows = dayRecords.filter(r => r.note !== "系統虛擬卡");
       
@@ -143,7 +157,7 @@ function checkAttendanceAbnormal(attendanceRows) {
           punchTypes: "補上班被拒絕"
         });
         Logger.log(`❌ ${date}: 補上班被拒絕`);
-      } else if (!hasPunchIn) {
+      } else if (!hasPunchIn && !isDayOff) {
         abnormalIdCounter++;
         abnormalRecords.push({
           date: date,
@@ -152,6 +166,8 @@ function checkAttendanceAbnormal(attendanceRows) {
           id: `abnormal-${abnormalIdCounter}`
         });
         Logger.log(`📋 ${date}: 缺少上班卡`);
+      } else if (!hasPunchIn && isDayOff) {
+        Logger.log(`⏭️ ${date}: 當天排休，跳過缺少上班卡提醒`);
       }
       
       // ⭐⭐⭐ 處理下班卡狀態
@@ -185,7 +201,7 @@ function checkAttendanceAbnormal(attendanceRows) {
           punchTypes: "補下班被拒絕"
         });
         Logger.log(`❌ ${date}: 補下班被拒絕`);
-      } else if (!hasPunchOut) {
+      } else if (!hasPunchOut && !isDayOff) {
         abnormalIdCounter++;
         abnormalRecords.push({
           date: date,
@@ -194,6 +210,8 @@ function checkAttendanceAbnormal(attendanceRows) {
           id: `abnormal-${abnormalIdCounter}`
         });
         Logger.log(`📋 ${date}: 缺少下班卡`);
+      } else if (!hasPunchOut && isDayOff) {
+        Logger.log(`⏭️ ${date}: 當天排休，跳過缺少下班卡提醒`);
       }
     }
   }

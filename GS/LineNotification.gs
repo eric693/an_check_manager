@@ -1336,11 +1336,18 @@ function checkForgotPunchDaily() {
     
     // 發送通知
     if (!hasPunchOut) {
-      try {
-        notifyForgotPunch(userId, name, dateStr, "下班");
-        Logger.log(`📤 已提醒 ${name} 昨天忘記下班打卡`);
-      } catch (err) {
-        Logger.log(`⚠️ 提醒 ${name} 失敗: ${err.message}`);
+      const shiftResult = getEmployeeShiftForDate(userId, dateStr);
+      const isDayOff = shiftResult && shiftResult.success && shiftResult.hasShift && shiftResult.data.shiftType === '排休';
+
+      if (isDayOff) {
+        Logger.log(`⏭️ ${name} 於 ${dateStr} 排休，跳過忘記下班打卡提醒`);
+      } else {
+        try {
+          notifyForgotPunch(userId, name, dateStr, "下班");
+          Logger.log(`📤 已提醒 ${name} 昨天忘記下班打卡`);
+        } catch (err) {
+          Logger.log(`⚠️ 提醒 ${name} 失敗: ${err.message}`);
+        }
       }
     }
   }
@@ -1398,11 +1405,18 @@ function checkForgotPunchInMorning() {
     }
     
     if (!hasPunchIn) {
-      try {
-        notifyForgotPunch(userId, name, dateStr, "上班");
-        Logger.log(`📤 已提醒 ${name} 昨天忘記上班打卡`);
-      } catch (err) {
-        Logger.log(`⚠️ 提醒 ${name} 失敗: ${err.message}`);
+      const shiftResult = getEmployeeShiftForDate(userId, dateStr);
+      const isDayOff = shiftResult && shiftResult.success && shiftResult.hasShift && shiftResult.data.shiftType === '排休';
+
+      if (isDayOff) {
+        Logger.log(`⏭️ ${name} 於 ${dateStr} 排休，跳過忘記上班打卡提醒`);
+      } else {
+        try {
+          notifyForgotPunch(userId, name, dateStr, "上班");
+          Logger.log(`📤 已提醒 ${name} 昨天忘記上班打卡`);
+        } catch (err) {
+          Logger.log(`⚠️ 提醒 ${name} 失敗: ${err.message}`);
+        }
       }
     }
   }
