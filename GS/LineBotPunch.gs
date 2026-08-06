@@ -6768,7 +6768,29 @@ function handleLeaveReview(replyToken, userId, employeeName, text) {
       
       Logger.log('✅ 假期餘額扣除成功');
     }
-    
+
+    // 與網頁審核一致：核准/拒絕後同步重算該月薪資
+    try {
+      const leaveStartDate = record[5];
+      let yearMonth = '';
+      if (leaveStartDate instanceof Date) {
+        yearMonth = Utilities.formatDate(leaveStartDate, 'Asia/Taipei', 'yyyy-MM');
+      } else if (leaveStartDate) {
+        yearMonth = String(leaveStartDate).substring(0, 7);
+      }
+      if (yearMonth) {
+        const recalcResult = calculateMonthlySalary(requestUserId, yearMonth);
+        if (recalcResult.success) {
+          saveMonthlySalary(recalcResult.data);
+          Logger.log('✅ 薪資已同步更新');
+        } else {
+          Logger.log('⚠️ 薪資計算失敗（不影響審核結果）: ' + recalcResult.message);
+        }
+      }
+    } catch (e) {
+      Logger.log('⚠️ 薪資重算例外（不影響審核結果）: ' + e);
+    }
+
     // 發送審核結果
     const leaveTypeName = getLeaveTypeName(leaveType);
     const resultText = action === 'approve' ? '✅ 已核准' : '❌ 已拒絕';
@@ -6795,71 +6817,10 @@ function handleLeaveReview(replyToken, userId, employeeName, text) {
  * 💰 扣除假期餘額（使用 userId）
  */
 function deductLeaveBalanceByUserId(userId, leaveType, hours) {
-  try {
-    Logger.log('📊 扣除假期餘額');
-    Logger.log(`   員工ID: ${userId}`);
-    Logger.log(`   假別: ${leaveType}`);
-    Logger.log(`   小時數: ${hours}`);
-    
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('假期餘額');
-    
-    if (!sheet) {
-      return { ok: false, msg: '假期餘額表不存在' };
-    }
-    
-    const values = sheet.getDataRange().getValues();
-    
-    const leaveTypeColumnMap = {
-      '特休假': 3,
-      '未住院病假': 4,
-      '事假': 5,
-      '喪假': 6,
-      '婚假': 7,
-      '產假': 8,
-      '陪產檢及陪產假': 9,
-      '住院病假': 10,
-      '生理假': 11,
-      '家庭照顧假': 12,
-      '公假(含兵役假)': 13,
-      '公傷假': 14,
-      '天然災害停班': 15,
-      '加班補休假': 16
-    };
-    
-    const columnIndex = leaveTypeColumnMap[leaveType];
-    
-    if (!columnIndex) {
-      return { ok: false, msg: '無效的假別' };
-    }
-    
-    for (let i = 1; i < values.length; i++) {
-      if (values[i][0] === userId) {
-        const currentBalance = values[i][columnIndex - 1];
-        
-        if (currentBalance < hours) {
-          return {
-            ok: false,
-            msg: `餘額不足（需要 ${hours} 小時，只剩 ${currentBalance} 小時）`
-          };
-        }
-        
-        const newBalance = currentBalance - hours;
-        
-        sheet.getRange(i + 1, columnIndex).setValue(newBalance);
-        sheet.getRange(i + 1, 18).setValue(new Date());
-        
-        Logger.log('✅ 餘額已更新');
-        
-        return { ok: true, remaining: newBalance };
-      }
-    }
-    
-    return { ok: false, msg: '找不到員工記錄' };
-    
-  } catch (error) {
-    Logger.log('❌ deductLeaveBalanceByUserId 錯誤: ' + error);
-    return { ok: false, msg: error.message };
-  }
+  // ⚠️ 此處原本自帶一份欄位對照表，但少了 C 欄「到職日」，
+  //    導致所有假別都少算一欄（特休假寫進到職日欄），LINE 核准後餘額沒被正確扣除。
+  //    統一改用 LeaveManagement.gs 的 deductLeaveBalance（19 欄版本）避免再度不同步。
+  return deductLeaveBalance(userId, leaveType, hours);
 }
 
 // ==================== 輔助函數 ====================
