@@ -1094,27 +1094,30 @@ function clearPunchIntent_(userId) {
 function isDuplicatePunch_(userId, punchType) {
   try {
     const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-    const values = sheet.getDataRange().getValues();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return false;
+
+    // 只讀最後 10 筆（原本 getDataRange() 會把整張表拉進記憶體，
+    // 但下面其實只看最近 10 筆，表格變大後這裡是純浪費且會拖慢鎖）
+    const height = Math.min(10, lastRow - 1);
+    const values = sheet.getRange(lastRow - height + 1, 1, height, 5).getValues();
     const now = new Date().getTime();
-    
+
     // 檢查最近 1 分鐘內的記錄
-    for (let i = values.length - 1; i >= 1; i--) {
+    for (let i = values.length - 1; i >= 0; i--) {
       const recordTime = new Date(values[i][0]).getTime();
       const recordUserId = values[i][1];
       const recordType = values[i][4];
-      
+
       // 如果是同一個人、同一種類型、時間在 1 分鐘內
-      if (recordUserId === userId && 
-          recordType === punchType && 
+      if (recordUserId === userId &&
+          recordType === punchType &&
           (now - recordTime) < 60000) {  // 60000ms = 1分鐘
         Logger.log('⚠️ 偵測到重複打卡，已忽略');
         return true;
       }
-      
-      // 只檢查最近 10 筆記錄即可
-      if (values.length - i > 10) break;
     }
-    
+
     return false;
     
   } catch (error) {
@@ -7367,22 +7370,11 @@ function handleLineWifiPunch(event, userId, employee, text) {
         return;
       }
 
-      // 防重複：同一天同類型只能打一次
+      // 防重複：同一天同類型只能打一次（只讀尾端，避免鎖裡做全表掃描）
       const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-      const today = Utilities.formatDate(now, 'Asia/Taipei', 'yyyy-MM-dd');
-      const attendanceValues = sh.getDataRange().getValues();
-      for (let i = 1; i < attendanceValues.length; i++) {
-        const row = attendanceValues[i];
-        if (!row[0]) continue;
-        const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
-        const rowUserId = String(row[1]).trim();
-        const rowType = String(row[4]).trim();
-        const rowNote = String(row[7] || '').trim();
-        if (rowNote === '補打卡') continue;
-        if (rowDate === today && rowUserId === userId && rowType === punchType) {
-          replyMessage(replyToken, '⚠️ 今天已經打過' + punchType + '卡，請勿重複打卡');
-          return;
-        }
+      if (hasPunchedToday_(userId, punchType, now)) {
+        replyMessage(replyToken, '⚠️ 今天已經打過' + punchType + '卡，請勿重複打卡');
+        return;
       }
 
       // 寫入打卡記錄

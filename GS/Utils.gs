@@ -13,6 +13,134 @@ function acquirePunchLock_(timeoutMs) {
   return lock;
 }
 
+/**
+ * 檢查某位員工今天是否已經打過某類型的卡（排除補打卡）。
+ *
+ * ⚠️ 效能關鍵：這個檢查是在 acquirePunchLock_() 的鎖裡跑的，
+ *    舊版用 getDataRange().getValues() 讀「整張打卡紀錄表」，
+ *    表格會逐日成長，尖峰時段每個人都握著全域鎖做一次全表掃描，
+ *    後面的人只能排隊，超過 waitLock 上限就整個打卡失敗（使用者感覺是當機）。
+ *    改成只從最後一列往前讀，讀到日期早於今天就停，成本與表格總長度無關。
+ *
+ * @param {string} userId 員工ID
+ * @param {string} type 上班 / 下班
+ * @param {Date} [now] 基準時間，預設為現在
+ * @returns {boolean} true 表示今天已打過同類型的卡
+ */
+function hasPunchedToday_(userId, type, now) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+  if (!sh) return false;
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return false;
+
+  const today = Utilities.formatDate(now || new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+  const targetUserId = String(userId).trim();
+  const targetType = String(type).trim();
+
+  const CHUNK = 300;          // 每次往前讀的列數
+  const MAX_SCAN = 3000;      // 保險上限，避免資料異常時無限往前讀
+  let bottom = lastRow;
+  let scanned = 0;
+
+  while (bottom >= 2 && scanned < MAX_SCAN) {
+    const height = Math.min(CHUNK, bottom - 1);
+    const top = bottom - height + 1;
+    // A~H 欄：時間, 員工ID, 部門, 姓名, 上下班, GPS, 地點, 備註
+    const rows = sh.getRange(top, 1, height, 8).getValues();
+    scanned += height;
+
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+      if (!row[0]) continue;
+
+      const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
+      // 資料是依時間往下追加的，往前讀到早於今天就可以收工
+      if (rowDate < today) return false;
+      if (rowDate !== today) continue;
+
+      if (String(row[7] || '').trim() === '補打卡') continue;
+
+      if (String(row[1]).trim() === targetUserId && String(row[4]).trim() === targetType) {
+        return true;
+      }
+    }
+
+    bottom = top - 1;
+  }
+
+  return false;
+}
+
+/**
+ * 取得「打卡紀錄」中屬於指定月份的資料列（不含標題列）。
+ *
+ * ⚠️ 效能關鍵：月報表、薪資計算原本都用 getDataRange().getValues() 把
+ *    整張打卡紀錄（10 欄 × 逐年成長的列數）拉進記憶體再 filter，
+ *    表格變大後這些 API 會愈跑愈久，跟打卡搶試算表資源。
+ *
+ *    這裡改成兩段式讀取：
+ *    1. 只讀 A 欄（打卡時間）找出符合月份的列號 —— 資料量是原本的 1/10
+ *    2. 只把涵蓋這些列號的區塊整列讀回來
+ *
+ *    注意：補打卡核准後會把「過去的時間」append 到表尾，所以本表並非
+ *    嚴格時間排序，不能用二分搜尋定位，必須掃過整個 A 欄才正確。
+ *
+ * @param {string} yearMonth 月份，格式 yyyy-MM
+ * @returns {Array[]} 該月份的資料列（每列為完整欄位陣列）
+ */
+function getAttendanceRowsForMonth_(yearMonth) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+  if (!sh) return [];
+
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return [];
+
+  // 第 1 段：只讀日期欄，找出符合月份的列
+  const dates = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+  let minIdx = -1;
+  let maxIdx = -1;
+
+  for (let i = 0; i < dates.length; i++) {
+    const v = dates[i][0];
+    if (!v) continue;
+
+    const d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) continue;
+
+    if (Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM') !== yearMonth) continue;
+
+    if (minIdx === -1) minIdx = i;
+    maxIdx = i;
+  }
+
+  if (minIdx === -1) return [];
+
+  // 第 2 段：只讀涵蓋這些列的區塊
+  const startRow = minIdx + 2;                 // +1 標題列, +1 轉成 1-based
+  const height = maxIdx - minIdx + 1;
+  const block = sh.getRange(startRow, 1, height, lastCol).getValues();
+
+  // 區塊中間可能夾雜其他月份（補打卡回填造成的亂序），再過濾一次
+  return block.filter(row => {
+    if (!row[0]) return false;
+    const d = (row[0] instanceof Date) ? row[0] : new Date(row[0]);
+    if (isNaN(d.getTime())) return false;
+    return Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM') === yearMonth;
+  });
+}
+
+/**
+ * 取得「打卡紀錄」的標題列
+ * @returns {Array} 標題列，找不到工作表時回傳空陣列
+ */
+function getAttendanceHeaders_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
+  if (!sh || sh.getLastColumn() < 1) return [];
+  return sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+}
+
 function jsonp(e, obj) {
   const cb = e.parameter.callback || "callback";
   return ContentService.createTextOutput(cb + "(" + JSON.stringify(obj) + ")")

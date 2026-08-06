@@ -33,3 +33,7 @@ const API_CONFIG = {
 };
 //  新增：為了兼容性，同時定義全域變數 apiUrl
 const apiUrl = API_CONFIG.apiUrl;
+
+// API 逾時上限（毫秒）。GAS 尖峰時段可能久久不回應，
+// 沒有上限的話前端 loading 遮罩會一直轉，使用者會誤以為系統當機。
+const API_TIMEOUT_MS = 30000;

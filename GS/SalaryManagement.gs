@@ -1794,14 +1794,15 @@ function getEmployeeMonthlyAttendanceInternal(employeeId, yearMonth, salaryType)
       return [];
     }
     
-    const data = sheet.getDataRange().getValues();
-    
-    if (data.length < 2) {
-      Logger.log('⚠️ 「打卡紀錄」工作表無資料');
+    // 只讀該月份的資料列，不再把整張打卡紀錄拉進記憶體
+    const headers = getAttendanceHeaders_();
+    const monthRows = getAttendanceRowsForMonth_(yearMonth);
+
+    if (headers.length === 0 || monthRows.length === 0) {
+      Logger.log('⚠️ 「打卡紀錄」工作表無該月份資料');
       return [];
     }
-    
-    const headers = data[0];
+
     Logger.log('📊 打卡紀錄欄位: ' + headers.join(', '));
     
     const punchTimeIndex = headers.indexOf('打卡時間');
@@ -1823,15 +1824,15 @@ function getEmployeeMonthlyAttendanceInternal(employeeId, yearMonth, salaryType)
     // ⭐ 按日期分組打卡記錄（改用陣列儲存所有打卡）
     const recordsByDate = {};
     
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      
+    for (let i = 0; i < monthRows.length; i++) {
+      const row = monthRows[i];
+
       const rowUserId = String(row[userIdIndex] || '').trim();
       const punchTime = row[punchTimeIndex];
       const punchType = String(row[typeIndex] || '').trim();
       const note = row[noteIndex] || '';
       const audit = row[auditIndex] || '';
-      
+
       if (rowUserId !== employeeId) continue;
       
       // 解析打卡時間

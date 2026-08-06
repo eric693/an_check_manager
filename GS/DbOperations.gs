@@ -376,9 +376,14 @@ function checkSession_(sessionToken) {
       }
       
       // 延長 Session
-      const newExpiredAt = new Date(new Date().getTime() + SESSION_TTL_MS);
-      sh.getRange(i + 1, 4).setValue(newExpiredAt);
-      
+      // ⚡ 只在「剩餘時間少於一半」時才寫回，避免每個 API 呼叫都觸發一次
+      //    試算表寫入（寫入會 flush，跟尖峰時段的打卡互搶資源）
+      const nowMs = Date.now();
+      const remainingMs = expiredAt ? (new Date(expiredAt).getTime() - nowMs) : 0;
+      if (remainingMs < SESSION_TTL_MS / 2) {
+        sh.getRange(i + 1, 4).setValue(new Date(nowMs + SESSION_TTL_MS));
+      }
+
       // 查詢員工資料
       const employee = findEmployeeByLineUserId_(userId);
       if (!employee.ok) {
@@ -482,30 +487,15 @@ function punch(sessionToken, type, lat, lng, note) {
   const lock = acquirePunchLock_(10000);
   try {
     // 防重複：同一天同類型（上班/下班）只能打一次
+    // 只讀表格尾端，不做全表掃描（鎖裡的操作要盡量短）
     const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-    const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
-    const attendanceValues = sh.getDataRange().getValues();
-
-    for (let i = 1; i < attendanceValues.length; i++) {
-      const row = attendanceValues[i];
-      if (!row[0]) continue;
-
-      const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
-      const rowUserId = String(row[1]).trim();
-      const rowType = String(row[4]).trim();
-      const rowNote = String(row[7] || '').trim();
-
-      // 跳過補打卡記錄
-      if (rowNote === '補打卡') continue;
-
-      if (rowDate === today && rowUserId === user.userId && rowType === type) {
-        Logger.log('防重複: ' + user.name + ' 今天（' + today + '）已打 ' + type + ' 卡');
-        return {
-          ok: false,
-          code: "ERR_DUPLICATE_PUNCH",
-          msg: '今天已經打過' + type + '卡，請勿重複打卡'
-        };
-      }
+    if (hasPunchedToday_(user.userId, type)) {
+      Logger.log('防重複: ' + user.name + ' 今天已打 ' + type + ' 卡');
+      return {
+        ok: false,
+        code: "ERR_DUPLICATE_PUNCH",
+        msg: '今天已經打過' + type + '卡，請勿重複打卡'
+      };
     }
 
     // 寫入打卡記錄
@@ -614,17 +604,11 @@ function punchAdjusted(sessionToken, type, punchDate, lat, lng, note) {
  * 取得出勤紀錄
  */
 function getAttendanceRecords(monthParam, userIdParam) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ATTENDANCE);
-  const values = sheet.getDataRange().getValues().slice(1);
-  
+  // 只讀該月份的資料列，不再把整張打卡紀錄拉進記憶體
+  const values = getAttendanceRowsForMonth_(monthParam);
+
   return values.filter(row => {
-    if (!row[0]) return false;
-    
-    const d = new Date(row[0]);
-    const yyyy_mm = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
-    const monthMatch = yyyy_mm === monthParam;
-    const userMatch = userIdParam ? row[1] === userIdParam : true;
-    return monthMatch && userMatch;
+    return userIdParam ? row[1] === userIdParam : true;
   }).map(r => ({
     date: r[0],
     userId: r[1],
@@ -1360,22 +1344,10 @@ function punchWifi(sessionToken, type, ssid, note, clientIp) {
   // 執行緒的寫入互相覆蓋
   const lock = acquirePunchLock_(10000);
   try {
-    // 防重複：同一天同類型只能打一次
+    // 防重複：同一天同類型只能打一次（只讀尾端，避免鎖裡做全表掃描）
     const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_ATTENDANCE);
-    const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
-    const attendanceValues = sh.getDataRange().getValues();
-
-    for (let i = 1; i < attendanceValues.length; i++) {
-      const row = attendanceValues[i];
-      if (!row[0]) continue;
-      const rowDate = Utilities.formatDate(new Date(row[0]), 'Asia/Taipei', 'yyyy-MM-dd');
-      const rowUserId = String(row[1]).trim();
-      const rowType = String(row[4]).trim();
-      const rowNote = String(row[7] || '').trim();
-      if (rowNote === '補打卡') continue;
-      if (rowDate === today && rowUserId === user.userId && rowType === type) {
-        return { ok: false, code: "ERR_DUPLICATE_PUNCH", msg: '今天已經打過' + type + '卡，請勿重複打卡' };
-      }
+    if (hasPunchedToday_(user.userId, type)) {
+      return { ok: false, code: "ERR_DUPLICATE_PUNCH", msg: '今天已經打過' + type + '卡，請勿重複打卡' };
     }
 
     // 寫入打卡記錄
@@ -1976,27 +1948,19 @@ function getEmployeeMonthlyPunchData(employeeId, yearMonth) {
     Logger.log('   員工ID: ' + employeeId);
     Logger.log('   月份: ' + yearMonth);
     
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ATTENDANCE);
-    const values = sheet.getDataRange().getValues();
-    
-    if (values.length <= 1) {
-      return { 
-        success: false, 
-        message: '無打卡記錄' 
+    // 只讀該月份的資料列，不再把整張打卡紀錄拉進記憶體
+    const monthRows = getAttendanceRowsForMonth_(yearMonth);
+
+    if (monthRows.length === 0) {
+      return {
+        success: false,
+        message: '無打卡記錄'
       };
     }
-    
-    // 過濾該員工該月份的記錄
-    const records = values.slice(1).filter(row => {
-      if (!row[0]) return false;
-      
-      const date = new Date(row[0]);
-      const recordMonth = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0");
-      const recordEmployeeId = row[1];
-      
-      return recordMonth === yearMonth && recordEmployeeId === employeeId;
-    });
-    
+
+    // 過濾該員工的記錄
+    const records = monthRows.filter(row => row[1] === employeeId);
+
     if (records.length === 0) {
       return {
         success: false,
