@@ -107,13 +107,18 @@ async function callApifetch(action, loadingId = "loading") {
     const loadingEl = document.getElementById(loadingId);
     if (loadingEl) loadingEl.style.display = "block";
     
+    //  逾時保護：後端（GAS）尖峰時段可能長時間不回應，
+    //     沒有逾時的話 loading 遮罩會一直轉，使用者會以為系統當機
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
     try {
-        const response = await fetch(url);
-        
+        const response = await fetch(url, { signal: controller.signal });
+
         if (!response.ok) {
             throw new Error(`HTTP 錯誤: ${response.status}`);
         }
-        
+
         const data = await response.json();
         
         //  雙向格式統一（關鍵修正）
@@ -139,10 +144,16 @@ async function callApifetch(action, loadingId = "loading") {
         
         return data;
     } catch (error) {
-        showNotification(t("CONNECTION_FAILED"), "error");
-        console.error("API 呼叫失敗:", error);
+        if (error.name === 'AbortError') {
+            showNotification('伺服器回應逾時，請稍後再試一次（您的資料尚未送出）', 'error');
+            console.error(`API 逾時（${API_TIMEOUT_MS}ms）:`, action);
+        } else {
+            showNotification(t("CONNECTION_FAILED"), "error");
+            console.error("API 呼叫失敗:", error);
+        }
         throw error;
     } finally {
+        clearTimeout(timeoutId);
         if (loadingEl) loadingEl.style.display = "none";
     }
 }
@@ -5692,6 +5703,53 @@ function closeHistoryAdjustDialog() {
         dialog.remove();
     }
 }
+/**
+ * 🆕 送出成功後，把對話框內容換成明確的「已送出」結果頁
+ * 目的：讓使用者確實看到申請結果，避免重複送出
+ */
+function showHistoryAdjustResult(ok, detail) {
+    const dialog = document.getElementById('history-adjust-dialog');
+    if (!dialog) return;
+    const box = dialog.firstElementChild;
+    if (!box) return;
+
+    box.innerHTML = `
+        <div class="text-center py-4">
+            <div class="text-5xl mb-3">✅</div>
+            <h3 class="text-xl font-bold text-green-600 dark:text-green-400 mb-2">申請已送出</h3>
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-1">${detail}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                狀態：<strong class="text-yellow-600 dark:text-yellow-400">待主管審核</strong><br>
+                請勿重複申請，可於「異常記錄」查看審核狀態。
+            </p>
+            <button onclick="closeHistoryAdjustDialog()"
+                    class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">
+                我知道了
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * 🆕 送出失敗時，在對話框內顯示常駐錯誤訊息（toast 會被遮住）
+ */
+function showHistoryAdjustError(msg) {
+    const dialog = document.getElementById('history-adjust-dialog');
+    if (!dialog) return;
+    const box = dialog.firstElementChild;
+    if (!box) return;
+
+    let el = document.getElementById('history-adjust-error');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'history-adjust-error';
+        el.className = 'mt-3 p-3 rounded bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 text-sm text-red-700 dark:text-red-300';
+        box.appendChild(el);
+    }
+    el.textContent = `❌ ${msg}`;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 let _isSubmittingHistory = false;
 /**
  * 🆕 提交歷史補打卡申請
@@ -5764,6 +5822,8 @@ async function submitHistoryAdjust() {
 
     // ===== 提交 =====（所有驗證通過後才鎖定）
     _isSubmittingHistory = true;
+    const oldErr = document.getElementById('history-adjust-error');
+    if (oldErr) oldErr.remove();
     const loadingText = '提交中...';
     generalButtonState(submitBtn, 'processing', loadingText);
     
@@ -5800,23 +5860,25 @@ async function submitHistoryAdjust() {
         
         if (res.ok) {
             showNotification(' 歷史補打卡申請已提交！等待主管審核', 'success');
-            closeHistoryAdjustDialog();
-            
+            // 顯示送出成功結果頁（避免使用者不確定是否成功而重複申請）
+            showHistoryAdjustResult(true, `${date} ${time}　補打${type}卡`);
+
             // 重新載入異常記錄
             await checkAbnormal();
         } else {
             showNotification(t(res.code) || '提交失敗', 'error');
+            showHistoryAdjustError(t(res.code) || '提交失敗，請確認後再送出');
         }
-        
+
     } catch (err) {
         console.error('歷史補打卡錯誤:', err);
-        
-        if (err.code === 1) {
-            showNotification('無法取得位置，請確認已開啟定位權限', 'error');
-        } else {
-            showNotification('提交失敗，請稍後再試', 'error');
-        }
-        
+
+        const msg = (err && err.code === 1)
+            ? '無法取得位置，請確認已開啟定位權限'
+            : '提交失敗，請稍後再試';
+        showNotification(msg, 'error');
+        showHistoryAdjustError(msg);
+
     } finally {
         _isSubmittingHistory = false;
         generalButtonState(submitBtn, 'idle');
