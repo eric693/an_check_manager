@@ -159,6 +159,20 @@ function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime,
       };
     }
     
+    // 餘額需扣掉「已送出但尚未審核」的時數，避免同一份額度被重複申請
+    const available = getAvailableLeaveHours_(user.userId, leaveType, balance.balance);
+    Logger.log(`   可用時數（已扣待審）: ${available}，本次申請: ${workHours}`);
+
+    if (workHours > available) {
+      Logger.log('❌ 假期餘額不足');
+      const overflowHint = (leaveType === 'MENSTRUAL_LEAVE') ? '（已含可併入的未住院病假）' : '';
+      return {
+        ok: false,
+        code: "ERR_INSUFFICIENT_BALANCE",
+        msg: `${leaveTypeToDisplayName_(leaveType)} 餘額不足：可用 ${available} 小時${overflowHint}，本次申請 ${workHours} 小時（已扣除待審核中的申請）`
+      };
+    }
+
     Logger.log('✅ 假期餘額檢查完成');
     Logger.log('');
     
@@ -273,6 +287,43 @@ function submitLeaveRequest(sessionToken, leaveType, startDateTime, endDateTime,
       msg: "系統錯誤：" + error.message
     };
   }
+}
+
+/**
+ * 計算某假別扣除待審核申請後的可用時數
+ * 生理假超過自身額度的部分併入未住院病假（勞基法／性平法第14條），因此可用時數含病假餘額
+ */
+function getAvailableLeaveHours_(userId, leaveType, balance) {
+  const pending = getPendingLeaveHoursByType_(userId);
+  const pendingOf = (code) => pending[leaveTypeToDisplayName_(code)] || 0;
+
+  if (leaveType === 'MENSTRUAL_LEAVE') {
+    return (balance.MENSTRUAL_LEAVE || 0) + (balance.SICK_LEAVE || 0)
+      - pendingOf('MENSTRUAL_LEAVE') - pendingOf('SICK_LEAVE');
+  }
+  return (balance[leaveType] || 0) - pendingOf(leaveType);
+}
+
+/**
+ * 統計員工各假別「待審核」的申請時數（以假別顯示名稱為 key）
+ */
+function getPendingLeaveHoursByType_(userId) {
+  const result = {};
+  const sheet = getLeaveRecordsSheet();
+  if (!sheet) return result;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return result;
+
+  // 只讀 B(員工ID) ~ K(狀態)
+  const values = sheet.getRange(2, 2, lastRow - 1, 10).getValues();
+  for (const row of values) {
+    if (row[0] !== userId) continue;
+    if (String(row[9]).trim() !== 'PENDING') continue;
+    const typeName = row[3];
+    result[typeName] = (result[typeName] || 0) + (Number(row[6]) || 0);
+  }
+  return result;
 }
 
 /**
@@ -831,6 +882,7 @@ function reviewLeaveRequest(sessionToken, rowNumber, reviewAction, comment) {
     Logger.log('');
     
     const status = (reviewAction === 'approve') ? 'APPROVED' : 'REJECTED';
+    let approveNote = '';
     
     sheet.getRange(rowNumber, 11).setValue(status);
     sheet.getRange(rowNumber, 12).setValue(employee.user.name);
@@ -860,6 +912,10 @@ function reviewLeaveRequest(sessionToken, rowNumber, reviewAction, comment) {
       Logger.log('✅ 假期餘額扣除成功');
       Logger.log(`   ${leaveType}: 扣除 ${workHours} 小時`);
       Logger.log(`   剩餘: ${deductResult.remaining} 小時`);
+
+      if (deductResult.mergedIntoSickHours) {
+        approveNote = `生理假額度不足，其中 ${deductResult.mergedIntoSickHours} 小時併入未住院病假扣除`;
+      }
     }
 
     // 請假核准或拒絕後，同步重算該月薪資（請假扣款會變動）
@@ -918,7 +974,7 @@ function reviewLeaveRequest(sessionToken, rowNumber, reviewAction, comment) {
 
     return {
       ok: true,
-      msg: "審核完成"
+      msg: approveNote ? `審核完成（${approveNote}）` : "審核完成"
     };
     
   } catch (error) {
@@ -978,9 +1034,36 @@ function deductLeaveBalance(userId, leaveType, hours) {
         Logger.log(`✅ 找到員工記錄（第 ${i + 1} 行）`);
         Logger.log(`   姓名: ${values[i][1]}`);
         
-        const currentBalance = values[i][columnIndex - 1];
+        const currentBalance = Number(values[i][columnIndex - 1]) || 0;
         
         Logger.log(`   目前餘額: ${currentBalance} 小時`);
+        
+        // 生理假額度不足時，不足的部分併入未住院病假扣除
+        if (leaveType === '生理假' && currentBalance < hours) {
+          const sickColumn = leaveTypeColumnMap['未住院病假'];
+          const sickBalance = Number(values[i][sickColumn - 1]) || 0;
+          const fromMenstrual = Math.max(currentBalance, 0);
+          const fromSick = hours - fromMenstrual;
+
+          if (sickBalance < fromSick) {
+            Logger.log(`   ⚠️ 餘額不足：生理假剩 ${currentBalance}、未住院病假剩 ${sickBalance}，需要 ${hours} 小時`);
+            return {
+              ok: false,
+              msg: `生理假 餘額不足（需要 ${hours} 小時，生理假剩 ${currentBalance} 小時，可併入的未住院病假剩 ${sickBalance} 小時）`
+            };
+          }
+
+          sheet.getRange(i + 1, columnIndex).setValue(currentBalance - fromMenstrual);
+          sheet.getRange(i + 1, sickColumn).setValue(sickBalance - fromSick);
+          sheet.getRange(i + 1, 19).setValue(new Date());
+
+          Logger.log(`   生理假扣 ${fromMenstrual} 小時，併入未住院病假扣 ${fromSick} 小時`);
+          return {
+            ok: true,
+            remaining: currentBalance - fromMenstrual,
+            mergedIntoSickHours: fromSick
+          };
+        }
         
         if (currentBalance < hours) {
           Logger.log(`   ⚠️ 餘額不足：需要 ${hours} 小時，只剩 ${currentBalance} 小時`);

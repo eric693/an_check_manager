@@ -302,31 +302,7 @@ async function submitLeaveApplication() {
     }
 
     try {
-        // 檢查假期餘額
-        try {
-            const balanceRes = await callApifetch('getLeaveBalance');
-
-            if (balanceRes.ok && balanceRes.balance) {
-                const availableHours = balanceRes.balance[leaveType] || 0;
-
-                console.log(` 假期餘額檢查:`, {
-                    假別: leaveType,
-                    可用小時: availableHours,
-                    申請小時: workHours
-                });
-
-                if (workHours > availableHours) {
-                    showNotification(
-                        `餘額不足！${t(leaveType)} 剩餘 ${availableHours} 小時，但您申請了 ${workHours} 小時`,
-                        'error'
-                    );
-                    return;
-                }
-            }
-        } catch (error) {
-            console.error(' 檢查餘額失敗:', error);
-        }
-
+        // 餘額（含待審核中的申請、生理假併入病假）統一由後端 submitLeave 檢查
         const response = await callApifetch(
             `submitLeave&leaveType=${encodeURIComponent(leaveType)}` +
             `&startDateTime=${encodeURIComponent(startTime)}` +
@@ -892,11 +868,12 @@ async function handleReviewLeave(button, action) {
         );
         
         if (res.ok) {
-            showNotification(action === 'approve' ? '已核准' : '已拒絕', 'success');
+            const doneMsg = action === 'approve' ? '已核准' : '已拒絕';
+            showNotification(res.msg && res.msg !== '審核完成' ? `${doneMsg}：${res.msg}` : doneMsg, 'success');
             await new Promise(resolve => setTimeout(resolve, 500));
             loadPendingLeaveRequests();
         } else {
-            showNotification('審核失敗', 'error');
+            showNotification(res.msg || '審核失敗', 'error');
         }
     } catch (err) {
         console.error('審核請假失敗:', err);

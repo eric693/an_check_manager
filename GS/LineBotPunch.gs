@@ -6754,6 +6754,7 @@ function handleLeaveReview(replyToken, userId, employeeName, text) {
     Logger.log(`✅ 審核狀態已更新: ${status}`);
     
     // 如果核准，扣除假期餘額
+    let mergedIntoSickHours = 0;
     if (action === 'approve') {
       Logger.log('💰 開始扣除假期餘額...');
       
@@ -6770,6 +6771,7 @@ function handleLeaveReview(replyToken, userId, employeeName, text) {
       }
       
       Logger.log('✅ 假期餘額扣除成功');
+      mergedIntoSickHours = deductResult.mergedIntoSickHours || 0;
     }
 
     // 與網頁審核一致：核准/拒絕後同步重算該月薪資
@@ -6804,7 +6806,8 @@ function handleLeaveReview(replyToken, userId, employeeName, text) {
       `員工：${requestEmployeeName}\n` +
       `假別：${leaveTypeName}\n` +
       `時數：${workHours} 小時\n\n` +
-      (action === 'approve' ? '已扣除假期餘額' : '未扣除假期餘額')
+      (action === 'approve' ? '已扣除假期餘額' : '未扣除假期餘額') +
+      (mergedIntoSickHours ? `\n（生理假額度不足，其中 ${mergedIntoSickHours} 小時併入未住院病假扣除）` : '')
     );
     
     Logger.log('✅ 審核完成');
