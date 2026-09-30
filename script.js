@@ -589,7 +589,7 @@ function renderAbnormalRecords(records) {
     }
     
     recordsLoading.style.display = 'none';
-    abnormalRecordsSection.style.display = 'block';
+    // 考勤紀錄區塊暫時隱藏，不再顯示
     
     if (records && records.length > 0) {
         console.log(` 有 ${records.length} 筆異常記錄`);
@@ -789,7 +789,7 @@ async function checkAbnormal() {
         recordsLoading.style.display = 'none';
         
         if (res.ok) {
-            abnormalRecordsSection.style.display = 'block';
+            // 考勤紀錄區塊暫時隱藏，不再顯示
             
             if (res.records && res.records.length > 0) {
                 console.log(' 有異常記錄，開始渲染');
