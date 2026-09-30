@@ -2318,6 +2318,17 @@ function handleInitApp(params) {
       return { ok: false, code: session.code };
     }
     
+    // 前端已隱藏考勤紀錄區塊時會帶 skipAbnormal=1，省掉整段計算
+    if (params.skipAbnormal === '1') {
+      return {
+        ok: true,
+        user: session.user,
+        code: session.code,
+        params: session.params,
+        abnormalRecords: []
+      };
+    }
+
     // 2. 取得異常記錄
     const now = new Date();
     const month = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
@@ -2327,7 +2338,8 @@ function handleInitApp(params) {
     const abnormalResults = checkAttendanceAbnormal(records);
     
     // 👇 3. 取得加班記錄（新增）
-    const overtimeRecords = getApprovedOvertimeRecords(userId, month);
+    // ⚠️ 參數順序是 (month, userId)，之前寫反導致每次都掃完整張加班表卻一筆都對不到
+    const overtimeRecords = getApprovedOvertimeRecords(month, userId);
     
     // 👇 4. 將加班記錄加入異常記錄陣列
     overtimeRecords.forEach(ot => {

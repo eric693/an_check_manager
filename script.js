@@ -420,6 +420,9 @@ const showNotification = (message, type = 'success') => {
     }, 3000);
 };
 
+// 考勤紀錄區塊目前隱藏；關閉時不向後端查詢異常記錄，減輕登入與打卡後的負擔
+const SHOW_ABNORMAL_RECORDS = false;
+
 // 確保登入
 // script.js - 完整替換 ensureLogin 函數
 async function ensureLogin() 
@@ -473,7 +476,7 @@ async function ensureLogin()
       document.getElementById("status").textContent = t("CHECKING_LOGIN");
       
       try {
-        const res = await callApifetch("initApp");
+        const res = await callApifetch(SHOW_ABNORMAL_RECORDS ? "initApp" : "initApp&skipAbnormal=1");
         
         if (res.ok) {
           console.log(' initApp 成功，儲存快取');
@@ -550,6 +553,7 @@ async function checkSessionInBackground(token) {
  * 背景載入異常記錄（不阻塞 UI）
  */
 async function loadAbnormalRecordsInBackground() {
+    if (!SHOW_ABNORMAL_RECORDS) return;
     try {
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -745,6 +749,7 @@ function renderAbnormalRecords(records) {
  *  檢查本月打卡異常（完整修正版 - 支援多語言）
  */
 async function checkAbnormal() {
+    if (!SHOW_ABNORMAL_RECORDS) return;
     const now = new Date();
     const month = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
     const userId = localStorage.getItem("sessionUserId");
@@ -2297,7 +2302,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const params = new URLSearchParams(window.location.search);
     const otoken = params.get('code');
-    const translationPromise = loadTranslations(currentLang);
     if (otoken) {
         try {
             const res = await callApifetch(`getProfile&otoken=${otoken}`);
@@ -2774,7 +2778,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         try {
             //  修正：改用 initApp（與 ensureLogin 一致）
-            const res = await callApifetch("initApp");
+            // 只需要確認身分，不需要異常記錄
+            const res = await callApifetch("initApp&skipAbnormal=1");
             
             console.log(' 管理員權限檢查:', res);
             console.log('   - ok:', res.ok);

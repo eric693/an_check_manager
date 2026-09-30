@@ -854,11 +854,6 @@ function getApprovedOvertimeRecords(monthParam, userIdParam) {
     // ⭐ 步驟 1: 取得標題列
     const headers = values[0];
     
-    Logger.log('📋 加班工作表標題:');
-    headers.forEach((h, i) => {
-      Logger.log(`   ${i}. ${h}`);
-    });
-    
     // ⭐ 步驟 2: 動態找出欄位索引
     const employeeIdCol = headers.indexOf('員工ID');
     const employeeNameCol = headers.indexOf('員工姓名');
@@ -968,20 +963,19 @@ function getApprovedOvertimeRecords(monthParam, userIdParam) {
     
     for (let i = 1; i < values.length; i++) {
       const row = values[i];
-      
-      // 格式化日期
-      const overtimeDate = formatOvertimeDate(row[overtimeDateCol]);
       const employeeId = row[employeeIdCol];
       const status = String(row[statusCol]).trim().toLowerCase();
+
+      // 先用便宜的條件過濾，再做日期格式化
+      if (userIdParam && employeeId !== userIdParam) continue;
+      if (status !== "approved") continue;
+
+      const overtimeDate = formatOvertimeDate(row[overtimeDateCol]);
       
       // 檢查條件
       const monthMatch = overtimeDate && overtimeDate.startsWith(monthParam);
       const userMatch = userIdParam ? employeeId === userIdParam : true;
       const statusMatch = status === "approved";
-      
-      Logger.log(`   ${i}. ${overtimeDate} - ${row[employeeNameCol]}`);
-      Logger.log(`      員工ID: ${employeeId}, 狀態: ${status}`);
-      Logger.log(`      monthMatch: ${monthMatch}, userMatch: ${userMatch}, statusMatch: ${statusMatch}`);
       
       if (monthMatch && userMatch && statusMatch) {
         const record = {
@@ -995,13 +989,6 @@ function getApprovedOvertimeRecords(monthParam, userIdParam) {
         };
         
         overtimeRecords.push(record);
-        
-        Logger.log(`      ✅ 符合條件！`);
-        Logger.log(`         日期: ${record.date}`);
-        Logger.log(`         時間: ${record.startTime} - ${record.endTime}`);
-        Logger.log(`         時數: ${record.hours}`);
-      } else {
-        Logger.log(`      ❌ 不符合條件`);
       }
     }
     

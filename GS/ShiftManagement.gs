@@ -513,22 +513,25 @@ function getShifts(filters) {
       const row = data[i];
       
       if (row[13] === '已刪除') continue;
+
+      if (filters) {
+        if (filters.employeeId && row[1] !== filters.employeeId) continue;
+        if (filters.shiftType && row[4] !== filters.shiftType) continue;
+        if (filters.location && row[7] !== filters.location) continue;
+      }
       
       const shiftDate = formatDateOnly(row[3]);
       
       if (filters) {
-        if (filters.employeeId && row[1] !== filters.employeeId) continue;
         if (filters.startDate && shiftDate < formatDateOnly(filters.startDate)) continue;
         if (filters.endDate && shiftDate > formatDateOnly(filters.endDate)) continue;
-        if (filters.shiftType && row[4] !== filters.shiftType) continue;
-        if (filters.location && row[7] !== filters.location) continue;
       }
       
       shifts.push({
         shiftId: row[0],
         employeeId: row[1],
         employeeName: row[2],
-        date: formatDateOnly(row[3]),
+        date: shiftDate,
         shiftType: row[4],
         startTime: formatTimeOnly(row[5]),
         endTime: formatTimeOnly(row[6]),

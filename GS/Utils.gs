@@ -97,19 +97,23 @@ function getAttendanceRowsForMonth_(yearMonth) {
   const lastCol = sh.getLastColumn();
   if (lastRow < 2 || lastCol < 1) return [];
 
+  // 月份起訖（台北時間），用時間戳比較，避免每列都呼叫 Utilities.formatDate
+  const [y, m] = yearMonth.split('-').map(Number);
+  const monthStartMs = Date.UTC(y, m - 1, 1) - 8 * 3600 * 1000;
+  const monthEndMs = Date.UTC(y, m, 1) - 8 * 3600 * 1000;
+  const inMonth = (v) => {
+    if (!v) return false;
+    const t = (v instanceof Date) ? v.getTime() : new Date(v).getTime();
+    return t >= monthStartMs && t < monthEndMs;
+  };
+
   // 第 1 段：只讀日期欄，找出符合月份的列
   const dates = sh.getRange(2, 1, lastRow - 1, 1).getValues();
   let minIdx = -1;
   let maxIdx = -1;
 
   for (let i = 0; i < dates.length; i++) {
-    const v = dates[i][0];
-    if (!v) continue;
-
-    const d = (v instanceof Date) ? v : new Date(v);
-    if (isNaN(d.getTime())) continue;
-
-    if (Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM') !== yearMonth) continue;
+    if (!inMonth(dates[i][0])) continue;
 
     if (minIdx === -1) minIdx = i;
     maxIdx = i;
@@ -123,12 +127,7 @@ function getAttendanceRowsForMonth_(yearMonth) {
   const block = sh.getRange(startRow, 1, height, lastCol).getValues();
 
   // 區塊中間可能夾雜其他月份（補打卡回填造成的亂序），再過濾一次
-  return block.filter(row => {
-    if (!row[0]) return false;
-    const d = (row[0] instanceof Date) ? row[0] : new Date(row[0]);
-    if (isNaN(d.getTime())) return false;
-    return Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM') === yearMonth;
-  });
+  return block.filter(row => inMonth(row[0]));
 }
 
 /**
